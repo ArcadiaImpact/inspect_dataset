@@ -5,7 +5,7 @@ A dataset quality scanner for AI evaluation datasets. Companion to
 agent trajectories — inspect-dataset scans the underlying datasets themselves.
 
 **Organisation:** Arcadia  
-**Status:** v0.1 in development
+**Status:** v0.1 complete, v0.1.1 in development
 
 ---
 
@@ -87,7 +87,35 @@ class FieldMap:
 
 ## Phased Roadmap
 
-### v0.1 — Static scanners, CLI, JSON + markdown output ← **current**
+### v0.1 — Static scanners, CLI, JSON + markdown output ✓
+
+### v0.1.1 — Scanner improvements from VQA-RAD audit ← **current**
+
+Findings from auditing `flaviagiammarino/vqa-rad` (451 test samples) exposed three
+gaps in the built-in scanners and one needed improvement:
+
+- [ ] **`duplicate_questions` severity split** — the scanner currently flags all
+  duplicate questions as HIGH. In multimodal datasets, the same question is often
+  asked about different images with different answers (valid). Split into:
+  - Same question + same answer → HIGH (likely a real duplicate / copy-paste error)
+  - Same question + different answers → LOW (informational; image context differentiates)
+  This requires an `--image-field` option so the scanner can check whether the image
+  also differs.
+- [ ] **`forced_choice_leakage` scanner** — flag questions that contain " or " where
+  the answer is one of the explicitly offered options (e.g. *"is this an MRI or a CT
+  scan?" → "mri"*). A model can exploit the question phrasing without visual
+  understanding. Category: `leakage`, severity: `medium`.
+- [ ] **`encoding_issues` scanner** — flag questions or answers containing
+  non-printable or non-ASCII characters (tabs, nulls, control characters, etc.).
+  Found one real instance in VQA-RAD: `'skull \tcartilage and medulla'` (tab char).
+  Category: `format`, severity: `low`.
+- [ ] **`binary_question_ratio` scanner** — flag datasets where a high proportion of
+  questions are binary (yes/no answers), even if no single answer dominates above the
+  85% imbalance threshold. VQA-RAD is 56% yes/no; a naive "always say no" strategy
+  scores 29.5%. Complements `answer_distribution`. Category: `distribution`,
+  severity: `low`.
+
+### v0.1 — Static scanners, CLI, JSON + markdown output
 
 - [x] Project scaffold (uv, pyproject.toml)
 - [x] Core types: `Finding`, `FieldMap`, `Severity`, `Category`
@@ -101,9 +129,9 @@ class FieldMap:
 - [x] Report generator: rich terminal output + REPORT.md
 - [x] CLI: `inspect-dataset scan <dataset> [options]`
 - [x] Tests: unit tests for each scanner
-- [ ] README
+- [x] README
 
-### v0.2 — LLM scanners
+### v0.2 — LLM scanners (planned)
 
 - [ ] `ambiguity` — LLM: "is this question unambiguous?"
 - [ ] `label_correctness` — LLM: "is this answer correct?"
@@ -111,7 +139,7 @@ class FieldMap:
 - [ ] `--model` CLI flag
 - [ ] Async scanner runner
 
-### v0.3 — Eval-informed scanners (inspect-scout integration)
+### v0.3 — Eval-informed scanners (inspect-scout integration, planned)
 
 - [ ] `universal_failure` — all models fail → bad label candidate
 - [ ] `universal_success` — all models succeed → leakage candidate
@@ -119,7 +147,7 @@ class FieldMap:
 - [ ] `model_contradicts_label` — model answer matches label but scorer gave 0
 - [ ] `--scout-results` CLI flag accepts inspect-scout parquet directory
 
-### v0.4 — Interactive review + export
+### v0.4 — Interactive review + export (planned)
 
 - [ ] `inspect-dataset review findings/` — step through flagged samples
 - [ ] `clean_ids.txt` export — sample IDs that passed all scanners
