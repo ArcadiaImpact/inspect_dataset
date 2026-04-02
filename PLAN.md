@@ -100,7 +100,7 @@ class FieldMap:
   - [x] `answer_distribution` — class imbalance detection
 - [x] Report generator: rich terminal output + REPORT.md
 - [x] CLI: `inspect-dataset scan <dataset> [options]`
-- [ ] Tests: unit tests for each scanner
+- [x] Tests: unit tests for each scanner
 - [ ] README
 
 ### v0.2 — LLM scanners
