@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import statistics
-from collections import Counter
 
 from inspect_dataset._types import FieldMap, Finding, Record
 from inspect_dataset.scanner import ScannerDef, get_sample_id
@@ -33,9 +32,13 @@ def _scan(records: list[Record], fields: FieldMap) -> list[Finding]:
             continue
         issues = []
         if mostly_lower and answer != answer.lower():
-            issues.append(f"majority of answers are lowercase but this is not: {answer!r}")
+            issues.append(
+                f"majority of answers are lowercase but this is not: {answer!r}"
+            )
         elif mostly_upper_first and not answer[0].isupper():
-            issues.append(f"majority of answers start with uppercase but this does not: {answer!r}")
+            issues.append(
+                f"majority of answers start with uppercase but this does not: {answer!r}"
+            )
 
         if issues:
             findings.append(
@@ -43,7 +46,8 @@ def _scan(records: list[Record], fields: FieldMap) -> list[Finding]:
                     scanner="inconsistent_format",
                     severity="low",
                     category="format",
-                    explanation="Capitalisation differs from dataset majority. " + "; ".join(issues),
+                    explanation="Capitalisation differs from dataset majority. "
+                    + "; ".join(issues),
                     sample_index=i,
                     sample_id=get_sample_id(record, fields, i),
                     metadata={"answer": answer, "issue": "capitalisation"},
@@ -59,7 +63,7 @@ def _scan(records: list[Record], fields: FieldMap) -> list[Finding]:
     for i, (record, answer) in enumerate(zip(records, answers)):
         if not answer:
             continue
-        has_p = answer[-1] in ".!?"
+        has_p = answer[-1] in ".!?" and not answer.endswith("etc.")
         issue = None
         if mostly_punct and not has_p:
             issue = f"majority of answers end with punctuation but this does not: {answer!r}"
@@ -72,7 +76,7 @@ def _scan(records: list[Record], fields: FieldMap) -> list[Finding]:
                     scanner="inconsistent_format",
                     severity="low",
                     category="format",
-                    explanation="Trailing punctuation differs from dataset majority. " + issue,
+                    explanation=f"Trailing punctuation differs from dataset majority. {issue}",
                     sample_index=i,
                     sample_id=get_sample_id(record, fields, i),
                     metadata={"answer": answer, "issue": "trailing_punctuation"},
