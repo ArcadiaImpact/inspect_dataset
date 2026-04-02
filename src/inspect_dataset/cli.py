@@ -23,6 +23,7 @@ def cli() -> None:
 @click.option("--question-field", default=None, help="Column name for questions (auto-detected if omitted).")
 @click.option("--answer-field", default=None, help="Column name for answers (auto-detected if omitted).")
 @click.option("--id-field", default=None, help="Column name for sample IDs (auto-detected if omitted).")
+@click.option("--image-field", default=None, help="Column name for images. Used by duplicate_questions to distinguish same-question/different-image pairs from true duplicates.")
 @click.option(
     "--scanners",
     default=None,
@@ -53,6 +54,7 @@ def scan(
     question_field: str | None,
     answer_field: str | None,
     id_field: str | None,
+    image_field: str | None,
     scanners: str | None,
     max_answer_words: int,
     limit: int | None,
@@ -90,7 +92,7 @@ def scan(
     records = load_hf_dataset(dataset, split=split, revision=revision, limit=limit)
     console.print(f"  Loaded {len(records):,} samples.")
 
-    fields = resolve_fields(records, question_field, answer_field, id_field)
+    fields = resolve_fields(records, question_field, answer_field, id_field, image_field)
     console.print(
         f"  Fields: question=[bold]{fields.question}[/bold]  "
         f"answer=[bold]{fields.answer}[/bold]"

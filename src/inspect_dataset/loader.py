@@ -84,6 +84,7 @@ def resolve_fields(
     question_field: str | None,
     answer_field: str | None,
     id_field: str | None,
+    image_field: str | None = None,
 ) -> FieldMap:
     """Return a FieldMap from explicit overrides or auto-detection."""
     if not records:
@@ -96,6 +97,7 @@ def resolve_fields(
             question=question_field,
             answer=answer_field,
             id=id_field,
+            image=image_field,
         )
 
     detected = auto_detect_fields(columns)
@@ -105,4 +107,5 @@ def resolve_fields(
         question=question_field or detected.question,
         answer=answer_field or detected.answer,
         id=id_field if id_field is not None else detected.id,
+        image=image_field,
     )

@@ -16,6 +16,7 @@ class FieldMap:
     question: str
     answer: str
     id: str | None = None
+    image: str | None = None
 
 
 @dataclass
