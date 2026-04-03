@@ -199,15 +199,7 @@ Scanners:
 - [x] LLM scanner registry (`LLM_SCANNER_FACTORIES`) + CLI wiring
 - [x] Tests for all three scanners (mocked LLM calls)
 
-### v0.3 — Eval-informed scanners (inspect-scout integration, planned)
-
-- [ ] `universal_failure` — all models fail → bad label candidate
-- [ ] `universal_success` — all models succeed → leakage candidate
-- [ ] `high_variance` — models disagree sharply → ambiguity candidate
-- [ ] `model_contradicts_label` — model answer matches label but scorer gave 0
-- [ ] `--scout-results` CLI flag accepts inspect-scout parquet directory
-
-### v0.4 — Interactive dataset explorer (planned)
+### v0.3 — Interactive dataset explorer (planned)
 
 A local web UI for triaging findings — findings-first navigation rather than
 data-first. The goal is to let a researcher work through flagged samples quickly,
@@ -346,6 +338,14 @@ re-opening the HF dataset with the same parameters recorded in
   `JsonPanel` components can be imported for the raw-record display rather than
   re-implementing them
 
+### v0.4 — Eval-informed scanners (inspect-scout integration, planned)
+
+- [ ] `universal_failure` — all models fail → bad label candidate
+- [ ] `universal_success` — all models succeed → leakage candidate
+- [ ] `high_variance` — models disagree sharply → ambiguity candidate
+- [ ] `model_contradicts_label` — model answer matches label but scorer gave 0
+- [ ] `--scout-results` CLI flag accepts inspect-scout parquet directory
+
 ---
 
 ## CLI Design
@@ -373,10 +373,10 @@ inspect-dataset scan ... --max-answer-words 6
 # View report from saved findings
 inspect-dataset report findings/
 
-# Interactive dataset explorer (v0.4)
+# Interactive dataset explorer (v0.3)
 inspect-dataset view findings/
 
-# (v0.3) Enrich with inspect-scout results
+# (v0.4) Enrich with inspect-scout results
 inspect-dataset scan ... --scout-results scout_results/
 ```
 
