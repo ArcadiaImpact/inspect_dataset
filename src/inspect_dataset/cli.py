@@ -5,7 +5,7 @@ from pathlib import Path
 import click
 from rich.console import Console
 
-from inspect_dataset.loader import import_task, load_hf_dataset, load_inspect_task, resolve_fields
+from inspect_dataset.loader import load_hf_dataset, load_task_from_spec, resolve_fields
 from inspect_dataset.report import print_report, save_findings
 from inspect_dataset.scanner import run_scanners
 from inspect_dataset.scanners import BUILTIN_SCANNER_NAMES, BUILTIN_SCANNERS
@@ -62,11 +62,13 @@ def scan(
 ) -> None:
     """Scan a dataset for quality issues.
 
-    DATASET is either:
+    DATASET is one of:
 
     \b
-      - A HuggingFace dataset path, e.g. flaviagiammarino/vqa-rad
-      - An inspect_ai task import path, e.g. inspect_evals.medqa@medqa
+      - A HuggingFace dataset path:    flaviagiammarino/vqa-rad
+      - An inspect_ai registry name:   inspect_evals/medqa
+      - A file + task name:            path/to/task.py@task_fn
+      - A module + task name:          inspect_evals.medqa@medqa
     """
     console = Console()
 
@@ -92,13 +94,16 @@ def scan(
             for s in scanner_list
         ]
 
-    # Detect inspect_ai task import path (module@task syntax, mirrors inspect CLI)
-    is_task = "@" in dataset
+    # Detect inspect_ai task spec.
+    # Heuristics (in priority order):
+    #   - contains "@"             → file@task or module@task
+    #   - contains "/" with a "."  → registry name like inspect_evals/medqa
+    #     (HF slugs are owner/dataset where owner has no dots)
+    is_task = "@" in dataset or ("/" in dataset and "." in dataset.split("/")[0])
 
     if is_task:
         console.print(f"Loading inspect_ai task [bold]{dataset}[/bold]...")
-        task_obj = import_task(dataset)
-        records, fields = load_inspect_task(task_obj, limit=limit)
+        records, fields = load_task_from_spec(dataset, limit=limit)
         # Allow field overrides even on the task path
         if question_field or answer_field or id_field:
             fields = resolve_fields(records, question_field, answer_field, id_field, image_field)

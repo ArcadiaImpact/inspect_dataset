@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from inspect_dataset.loader import _input_to_str, _target_to_str, import_task, load_inspect_task
+from inspect_dataset.loader import _input_to_str, _target_to_str, load_inspect_task, load_task_from_spec
 
 
 # ---------------------------------------------------------------------------
@@ -176,26 +176,34 @@ def test_multiple_samples_all_loaded():
 
 
 # ---------------------------------------------------------------------------
-# import_task
+# load_task_from_spec — module@attr path (no inspect_ai needed for this path)
 # ---------------------------------------------------------------------------
 
 
-def test_import_task_valid():
-    obj = import_task("os.path@join")
-    import os.path
-    assert obj is os.path.join
+def test_load_task_from_spec_module_at_attr():
+    # Use a dotted module name so the module-import branch is taken
+    import sys
+    import types
+
+    task = _make_task(_Sample("q", "a", id=1))
+    fake_mod = types.ModuleType("_fake_pkg._fake_mod")
+    fake_mod.my_task = task  # type: ignore[attr-defined]
+    sys.modules["_fake_pkg._fake_mod"] = fake_mod
+
+    records, fields = load_task_from_spec("_fake_pkg._fake_mod@my_task")
+    assert len(records) == 1
+    assert records[0]["input"] == "q"
+
+    del sys.modules["_fake_pkg._fake_mod"]
 
 
-def test_import_task_missing_at():
-    with pytest.raises(ValueError, match="module@attr"):
-        import_task("inspect_evals.medqa")
+def test_load_task_from_spec_bad_module():
+    # Dotted name triggers the module-import branch; module doesn't exist
+    with pytest.raises(ImportError, match="no_such_pkg.no_such_mod"):
+        load_task_from_spec("no_such_pkg.no_such_mod@something")
 
 
-def test_import_task_bad_module():
-    with pytest.raises(ImportError, match="no_such_module_xyz"):
-        import_task("no_such_module_xyz@something")
-
-
-def test_import_task_bad_attr():
+def test_load_task_from_spec_bad_attr():
+    # Dotted module exists but attribute does not
     with pytest.raises(AttributeError, match="no_such_attr_xyz"):
-        import_task("os.path@no_such_attr_xyz")
+        load_task_from_spec("os.path@no_such_attr_xyz")

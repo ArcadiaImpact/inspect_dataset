@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
 from typing import Any
 
 from inspect_dataset._types import FieldMap, Record
@@ -156,27 +157,60 @@ def load_inspect_task(task_or_fn: Any, limit: int | None = None) -> tuple[list[R
     return records, fields
 
 
-def import_task(import_path: str) -> Any:
-    """Import a task function or object from a ``module@attr`` path.
+def load_task_from_spec(spec: str, limit: int | None = None) -> tuple[list[Record], FieldMap]:
+    """Load records from a task spec string, using the inspect_ai registry.
 
-    Mirrors the ``file@task_name`` syntax used by the inspect_ai CLI, but with
-    a Python module path on the left instead of a file path.
+    Accepts the same spec formats as ``inspect eval``:
 
-    Example: ``inspect_evals.medqa@medqa`` imports ``medqa`` from
-    ``inspect_evals.medqa``.
+    - Registry name (bare):        ``inspect_evals/medqa``
+    - File + task name:            ``path/to/task.py@task_fn``
+    - Module + task name:          ``inspect_evals.medqa@medqa``
+
+    For registry names and ``file@task`` specs, this delegates to
+    ``inspect_ai.load_task_spec`` so the full entry-points and registry
+    machinery is used identically to the ``inspect`` CLI.
+
+    For ``module@attr`` specs where the left side looks like a Python module
+    path (contains ``.`` but is not a file path), the attribute is imported
+    directly without going through the registry.
+
+    Raises ``ImportError`` if ``inspect_ai`` is not installed.
     """
-    if "@" not in import_path:
-        raise ValueError(
-            f"Task import path must be in 'module@attr' format, got: {import_path!r}"
-        )
-    module_path, attr = import_path.rsplit("@", 1)
     try:
-        module = importlib.import_module(module_path)
-    except ImportError as e:
-        raise ImportError(f"Could not import module {module_path!r}: {e}") from e
-    if not hasattr(module, attr):
-        raise AttributeError(f"Module {module_path!r} has no attribute {attr!r}")
-    return getattr(module, attr)
+        from inspect_ai._eval.loader import load_task_spec as _inspect_load_task_spec
+    except ImportError:
+        raise ImportError(
+            "inspect_ai is required to load tasks by spec. "
+            "Install it with: pip install inspect-ai"
+        )
+
+    has_at = "@" in spec
+
+    if has_at:
+        left, right = spec.rsplit("@", 1)
+        left_path = Path(left)
+        # If the left side is a dotted module path (not a file), import directly
+        # so callers don't need the task to be @task-decorated / registered.
+        if "." in left and not left_path.exists():
+            try:
+                module = importlib.import_module(left)
+            except ImportError as e:
+                raise ImportError(f"Could not import module {left!r}: {e}") from e
+            if not hasattr(module, right):
+                raise AttributeError(f"Module {left!r} has no attribute {right!r}")
+            task_obj = getattr(module, right)
+            return load_inspect_task(task_obj, limit=limit)
+
+    # Fall through: let inspect_ai's loader handle it (registry name, file@task, etc.)
+    tasks = _inspect_load_task_spec(spec)
+    if not tasks:
+        raise ValueError(f"No tasks found for spec {spec!r}")
+    if len(tasks) > 1:
+        raise ValueError(
+            f"Spec {spec!r} matched {len(tasks)} tasks; use a more specific spec "
+            f"(e.g. include the task name after @)."
+        )
+    return load_inspect_task(tasks[0], limit=limit)
 
 
 def resolve_fields(
