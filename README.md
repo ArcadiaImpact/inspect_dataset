@@ -39,6 +39,15 @@ inspect-dataset scan flaviagiammarino/vqa-rad --max-answer-words 6
 # Limit samples loaded
 inspect-dataset scan flaviagiammarino/vqa-rad --limit 500
 
+# Run LLM-powered scanners (requires --model)
+inspect-dataset scan flaviagiammarino/vqa-rad \
+  --model openai/gpt-4o-mini --split test -o findings/
+
+# Run only specific LLM scanners
+inspect-dataset scan flaviagiammarino/vqa-rad \
+  --model openai/gpt-4o-mini \
+  --scanners label_correctness,ambiguity
+
 # View a saved report
 inspect-dataset report findings/
 ```
@@ -51,6 +60,17 @@ inspect-dataset report findings/
 | `duplicate_questions` | high | Questions that appear more than once. Duplicates inflate sample counts and bias metrics. |
 | `inconsistent_format` | low/medium | Capitalisation, punctuation, or length deviations from the dataset majority (80%+ threshold). |
 | `answer_distribution` | high | Datasets where a single answer accounts for ≥85% of samples — a model that always predicts that answer would score highly without any understanding. |
+| `forced_choice_leakage` | medium | Questions offering explicit options via "or" where the answer is one of those options. |
+| `encoding_issues` | low | Questions or answers containing non-printable or control characters. |
+| `binary_question_ratio` | low | Datasets where a high proportion of questions are binary (yes/no). |
+
+### LLM Scanners (require `--model`)
+
+| Scanner | Severity | What it flags |
+| ------- | -------- | ------------- |
+| `ambiguity` | medium | Questions that are ambiguous or underspecified — can be interpreted multiple ways. |
+| `label_correctness` | high | Samples where the ground-truth answer appears to be factually incorrect. |
+| `answerability` | medium | Questions that cannot be answered from the provided context (auto-detects context columns). |
 
 ## Output
 

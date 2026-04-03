@@ -12,5 +12,8 @@ wheels/
 # Mac OS
 .DS_Store
 
+# Environment files
+.env
+
 # inspect-dataset generated files
 findings/

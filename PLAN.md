@@ -5,7 +5,7 @@ A dataset quality scanner for AI evaluation datasets. Companion to
 agent trajectories — inspect-dataset scans the underlying datasets themselves.
 
 **Organisation:** Arcadia  
-**Status:** v0.1.2 complete
+**Status:** v0.2.0 complete
 
 ---
 
@@ -89,7 +89,7 @@ class FieldMap:
 
 ### v0.1 — Static scanners, CLI, JSON + markdown output ✓
 
-### v0.1.1 — Scanner improvements from VQA-RAD audit ← **current**
+### v0.1.1 — Scanner improvements from VQA-RAD audit ✓
 
 Findings from auditing `flaviagiammarino/vqa-rad` (451 test samples) exposed three
 gaps in the built-in scanners and one needed improvement:
@@ -169,13 +169,35 @@ task specs vs HF slugs uses `importlib.util.find_spec` — if the left side of
   server to reload samples on demand) — deferred to v0.4
 - [ ] View server: serve `__files__` bytes for inline rendering — deferred to v0.4
 
-### v0.2 — LLM scanners (planned)
+### v0.2 — LLM scanners ✓
 
-- [ ] `ambiguity` — LLM: "is this question unambiguous?"
-- [ ] `label_correctness` — LLM: "is this answer correct?"
-- [ ] `answerability` — LLM: "can this be answered from the provided context?"
-- [ ] `--model` CLI flag
-- [ ] Async scanner runner
+Three LLM-powered scanners that use `inspect_ai`'s model API. Enabled via
+`--model` (e.g. `--model openai/gpt-4o-mini`). Without `--model`, only static
+scanners run — existing behaviour is unchanged.
+
+Architecture additions:
+
+- `_llm.py`: model resolution via `inspect_ai.model.get_model()`, concurrent
+  batch evaluation with semaphore-based rate limiting, structured YES/NO
+  judgment parsing
+- `LLMScannerDef`: async counterpart to `ScannerDef`; factory pattern
+  (`_make_scanner(model_name)`) so the model is bound at CLI time
+- `run_scanners_async()`: runs sync scanners sequentially then async scanners
+  concurrently via `asyncio.gather`
+
+Scanners:
+
+- [x] `ambiguity` — LLM: "is this question ambiguous or underspecified?"
+  Category: `question_quality`, severity: `medium`
+- [x] `label_correctness` — LLM: "is this answer incorrect?"
+  Category: `label_quality`, severity: `high`
+- [x] `answerability` — LLM: "can this be answered from the provided context?"
+  Auto-detects context columns (`context`, `passage`, `paragraph`, etc.).
+  Category: `question_quality`, severity: `medium`
+- [x] `--model` CLI flag
+- [x] Async scanner runner (`run_scanners_async`)
+- [x] LLM scanner registry (`LLM_SCANNER_FACTORIES`) + CLI wiring
+- [x] Tests for all three scanners (mocked LLM calls)
 
 ### v0.3 — Eval-informed scanners (inspect-scout integration, planned)
 

@@ -1,11 +1,20 @@
-from inspect_dataset.scanner import ScannerDef
+from collections.abc import Callable
+
+from inspect_dataset.scanner import LLMScannerDef, ScannerDef
+from inspect_dataset.scanners.ambiguity import _make_scanner as _make_ambiguity
 from inspect_dataset.scanners.answer_distribution import answer_distribution
 from inspect_dataset.scanners.answer_length import answer_length
+from inspect_dataset.scanners.answerability import (
+    _make_scanner as _make_answerability,
+)
+from inspect_dataset.scanners.binary_question_ratio import binary_question_ratio
 from inspect_dataset.scanners.duplicate_questions import duplicate_questions
 from inspect_dataset.scanners.encoding_issues import encoding_issues
 from inspect_dataset.scanners.forced_choice_leakage import forced_choice_leakage
 from inspect_dataset.scanners.inconsistent_format import inconsistent_format
-from inspect_dataset.scanners.binary_question_ratio import binary_question_ratio
+from inspect_dataset.scanners.label_correctness import (
+    _make_scanner as _make_label_correctness,
+)
 
 BUILTIN_SCANNERS: list[ScannerDef] = [
     answer_length,
@@ -17,4 +26,13 @@ BUILTIN_SCANNERS: list[ScannerDef] = [
     binary_question_ratio,
 ]
 
-BUILTIN_SCANNER_NAMES = {s.name: s for s in BUILTIN_SCANNERS}
+BUILTIN_SCANNER_NAMES: dict[str, ScannerDef] = {s.name: s for s in BUILTIN_SCANNERS}
+
+# LLM scanner factories: name → callable(model_name) → LLMScannerDef
+LLM_SCANNER_FACTORIES: dict[str, Callable[..., LLMScannerDef]] = {
+    "ambiguity": _make_ambiguity,
+    "label_correctness": _make_label_correctness,
+    "answerability": _make_answerability,
+}
+
+ALL_SCANNER_NAMES: set[str] = set(BUILTIN_SCANNER_NAMES) | set(LLM_SCANNER_FACTORIES)
