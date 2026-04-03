@@ -95,11 +95,15 @@ def scan(
         ]
 
     # Detect inspect_ai task spec.
-    # Heuristics (in priority order):
-    #   - contains "@"             → file@task or module@task
-    #   - contains "/" with a "."  → registry name like inspect_evals/medqa
-    #     (HF slugs are owner/dataset where owner has no dots)
-    is_task = "@" in dataset or ("/" in dataset and "." in dataset.split("/")[0])
+    # - "@" present → always a task spec (module@fn or file@fn)
+    # - "package/task" with no "@" → task if "package" is an installed Python
+    #   package (importlib.util.find_spec returns non-None); HF slugs like
+    #   "owner/dataset" have no corresponding Python package.
+    import importlib.util as _ilu
+    is_task = "@" in dataset or (
+        "/" in dataset
+        and _ilu.find_spec(dataset.split("/")[0]) is not None
+    )
 
     if is_task:
         console.print(f"Loading inspect_ai task [bold]{dataset}[/bold]...")

@@ -157,25 +157,101 @@ def load_inspect_task(task_or_fn: Any, limit: int | None = None) -> tuple[list[R
     return records, fields
 
 
+def _find_task_in_module(module: Any, hint: str) -> Any:
+    """Find a single @task-decorated callable in a module.
+
+    First tries an attribute named ``hint`` (the task name from the spec).
+    If that is itself a module or non-callable, falls back to scanning for
+    ``@task``-registered callables via the inspect_ai registry.
+
+    Returns the callable, or raises ``ValueError`` with a helpful message.
+    """
+    candidate = getattr(module, hint, None)
+    # Accept callables (task functions) and Task-like objects directly
+    if candidate is not None and (callable(candidate) or hasattr(candidate, "dataset")):
+        return candidate
+
+    # hint resolved to a non-callable (e.g. a submodule) — scan for @task fns
+    try:
+        from inspect_ai._util.registry import is_registry_object, registry_info as _rinfo
+        task_fns = [
+            obj
+            for name in dir(module)
+            if not name.startswith("_")
+            for obj in [getattr(module, name, None)]
+            if obj is not None and callable(obj)
+            and is_registry_object(obj)
+            and _rinfo(obj).type == "task"
+        ]
+    except ImportError:
+        task_fns = []
+
+    if len(task_fns) == 1:
+        return task_fns[0]
+    if len(task_fns) > 1:
+        names = ", ".join(
+            getattr(fn, "__name__", str(fn)) for fn in task_fns
+        )
+        raise ValueError(
+            f"Module {module.__name__!r} contains multiple tasks: {names}. "
+            f"Specify one explicitly, e.g. {module.__name__}@<task_name>"
+        )
+    raise AttributeError(
+        f"Module {module.__name__!r} has no @task-decorated callable named {hint!r} "
+        f"and no unique @task callable was found."
+    )
+
+
 def load_task_from_spec(spec: str, limit: int | None = None) -> tuple[list[Record], FieldMap]:
-    """Load records from a task spec string, using the inspect_ai registry.
+    """Load records from a task spec string.
 
     Accepts the same spec formats as ``inspect eval``:
 
-    - Registry name (bare):        ``inspect_evals/medqa``
-    - File + task name:            ``path/to/task.py@task_fn``
-    - Module + task name:          ``inspect_evals.medqa@medqa``
+    - Package + task name:    ``inspect_evals/gpqa_diamond``  (mirrors inspect CLI)
+    - Module + task name:     ``inspect_evals.gpqa@gpqa_diamond``
+    - File + task name:       ``path/to/task.py@task_fn``     (via inspect_ai registry)
 
-    For registry names and ``file@task`` specs, this delegates to
-    ``inspect_ai.load_task_spec`` so the full entry-points and registry
-    machinery is used identically to the ``inspect`` CLI.
+    For ``package/task_name`` specs, the module ``package.task_name`` is imported
+    directly and the task function is located by name or by scanning for
+    ``@task``-decorated callables. This works even when the inspect_ai entry-point
+    loader cannot run (e.g. optional dependencies of the eval package are missing).
 
-    For ``module@attr`` specs where the left side looks like a Python module
-    path (contains ``.`` but is not a file path), the attribute is imported
-    directly without going through the registry.
+    For ``module@attr`` specs (left side contains ``.``), the attribute is imported
+    directly from the module.
 
-    Raises ``ImportError`` if ``inspect_ai`` is not installed.
+    For ``file@task`` specs (left side is an existing file path), this delegates to
+    ``inspect_ai``'s loader.
+
+    Raises ``ImportError`` if ``inspect_ai`` is not installed and the spec requires it.
     """
+    has_at = "@" in spec
+
+    if has_at:
+        left, right = spec.rsplit("@", 1)
+        left_path = Path(left)
+
+        if not left_path.exists():
+            # module@attr — import the module directly
+            try:
+                module = importlib.import_module(left)
+            except ImportError as e:
+                raise ImportError(f"Could not import module {left!r}: {e}") from e
+            task_obj = _find_task_in_module(module, right)
+            return load_inspect_task(task_obj, limit=limit)
+
+        # file@task — delegate to inspect_ai
+    else:
+        # package/task_name — try direct module import first
+        if "/" in spec:
+            pkg, task_name = spec.split("/", 1)
+            try:
+                module = importlib.import_module(f"{pkg}.{task_name}")
+                task_obj = _find_task_in_module(module, task_name)
+                return load_inspect_task(task_obj, limit=limit)
+            except (ImportError, AttributeError, ValueError):
+                pass  # fall through to inspect_ai registry
+
+    # Fall through: delegate to inspect_ai's registry / file loader
     try:
         from inspect_ai._eval.loader import load_task_spec as _inspect_load_task_spec
     except ImportError:
@@ -184,24 +260,6 @@ def load_task_from_spec(spec: str, limit: int | None = None) -> tuple[list[Recor
             "Install it with: pip install inspect-ai"
         )
 
-    has_at = "@" in spec
-
-    if has_at:
-        left, right = spec.rsplit("@", 1)
-        left_path = Path(left)
-        # If the left side is a dotted module path (not a file), import directly
-        # so callers don't need the task to be @task-decorated / registered.
-        if "." in left and not left_path.exists():
-            try:
-                module = importlib.import_module(left)
-            except ImportError as e:
-                raise ImportError(f"Could not import module {left!r}: {e}") from e
-            if not hasattr(module, right):
-                raise AttributeError(f"Module {left!r} has no attribute {right!r}")
-            task_obj = getattr(module, right)
-            return load_inspect_task(task_obj, limit=limit)
-
-    # Fall through: let inspect_ai's loader handle it (registry name, file@task, etc.)
     tasks = _inspect_load_task_spec(spec)
     if not tasks:
         raise ValueError(f"No tasks found for spec {spec!r}")
