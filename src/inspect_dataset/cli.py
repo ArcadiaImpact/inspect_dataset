@@ -5,7 +5,7 @@ from pathlib import Path
 import click
 from rich.console import Console
 
-from inspect_dataset.loader import load_hf_dataset, resolve_fields
+from inspect_dataset.loader import import_task, load_hf_dataset, load_inspect_task, resolve_fields
 from inspect_dataset.report import print_report, save_findings
 from inspect_dataset.scanner import run_scanners
 from inspect_dataset.scanners import BUILTIN_SCANNER_NAMES, BUILTIN_SCANNERS
@@ -60,9 +60,13 @@ def scan(
     limit: int | None,
     output_dir: str | None,
 ) -> None:
-    """Scan a HuggingFace dataset for quality issues.
+    """Scan a dataset for quality issues.
 
-    DATASET is a HuggingFace dataset path, e.g. flaviagiammarino/vqa-rad
+    DATASET is either:
+
+    \b
+      - A HuggingFace dataset path, e.g. flaviagiammarino/vqa-rad
+      - An inspect_ai task import path, e.g. inspect_evals.medqa:medqa
     """
     console = Console()
 
@@ -88,11 +92,22 @@ def scan(
             for s in scanner_list
         ]
 
-    console.print(f"Loading [bold]{dataset}[/bold] split=[bold]{split}[/bold]...")
-    records = load_hf_dataset(dataset, split=split, revision=revision, limit=limit)
-    console.print(f"  Loaded {len(records):,} samples.")
+    # Detect inspect_ai task import path (module:attr syntax)
+    is_task = ":" in dataset and "://" not in dataset
 
-    fields = resolve_fields(records, question_field, answer_field, id_field, image_field)
+    if is_task:
+        console.print(f"Loading inspect_ai task [bold]{dataset}[/bold]...")
+        task_obj = import_task(dataset)
+        records, fields = load_inspect_task(task_obj, limit=limit)
+        # Allow field overrides even on the task path
+        if question_field or answer_field or id_field:
+            fields = resolve_fields(records, question_field, answer_field, id_field, image_field)
+    else:
+        console.print(f"Loading [bold]{dataset}[/bold] split=[bold]{split}[/bold]...")
+        records = load_hf_dataset(dataset, split=split, revision=revision, limit=limit)
+        fields = resolve_fields(records, question_field, answer_field, id_field, image_field)
+
+    console.print(f"  Loaded {len(records):,} samples.")
     console.print(
         f"  Fields: question=[bold]{fields.question}[/bold]  "
         f"answer=[bold]{fields.answer}[/bold]"
