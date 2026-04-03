@@ -157,16 +157,19 @@ def load_inspect_task(task_or_fn: Any, limit: int | None = None) -> tuple[list[R
 
 
 def import_task(import_path: str) -> Any:
-    """Import a task function or object from a ``module:attr`` path.
+    """Import a task function or object from a ``module@attr`` path.
 
-    Example: ``inspect_evals.medqa:medqa`` imports ``medqa`` from
+    Mirrors the ``file@task_name`` syntax used by the inspect_ai CLI, but with
+    a Python module path on the left instead of a file path.
+
+    Example: ``inspect_evals.medqa@medqa`` imports ``medqa`` from
     ``inspect_evals.medqa``.
     """
-    if ":" not in import_path:
+    if "@" not in import_path:
         raise ValueError(
-            f"Task import path must be in 'module:attr' format, got: {import_path!r}"
+            f"Task import path must be in 'module@attr' format, got: {import_path!r}"
         )
-    module_path, attr = import_path.rsplit(":", 1)
+    module_path, attr = import_path.rsplit("@", 1)
     try:
         module = importlib.import_module(module_path)
     except ImportError as e:

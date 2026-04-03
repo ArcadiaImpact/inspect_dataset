@@ -151,8 +151,8 @@ results = scan_task(medqa())        # pre-instantiated Task also accepted
 ```
 
 ```bash
-# CLI: dotted import path to a task function or @task-decorated callable
-inspect-dataset scan inspect_evals.medqa:medqa \
+# CLI: module@task syntax (mirrors the file@task_name convention in inspect CLI)
+inspect-dataset scan inspect_evals.medqa@medqa \
   --split test \
   -o findings/
 ```
@@ -350,8 +350,8 @@ inspect-dataset scan flaviagiammarino/vqa-rad \
   --question-field question \
   -o findings/
 
-# Scan an inspect_ai Task (v0.1.2) — module:attr import path
-inspect-dataset scan inspect_evals.medqa:medqa -o findings/
+# Scan an inspect_ai Task (v0.1.2) — module@task import path
+inspect-dataset scan inspect_evals.medqa@medqa -o findings/
 
 # Limit to specific scanners
 inspect-dataset scan ... --scanners answer_length,duplicate_questions

@@ -181,21 +181,21 @@ def test_multiple_samples_all_loaded():
 
 
 def test_import_task_valid():
-    obj = import_task("os.path:join")
+    obj = import_task("os.path@join")
     import os.path
     assert obj is os.path.join
 
 
-def test_import_task_missing_colon():
-    with pytest.raises(ValueError, match="module:attr"):
+def test_import_task_missing_at():
+    with pytest.raises(ValueError, match="module@attr"):
         import_task("inspect_evals.medqa")
 
 
 def test_import_task_bad_module():
     with pytest.raises(ImportError, match="no_such_module_xyz"):
-        import_task("no_such_module_xyz:something")
+        import_task("no_such_module_xyz@something")
 
 
 def test_import_task_bad_attr():
     with pytest.raises(AttributeError, match="no_such_attr_xyz"):
-        import_task("os.path:no_such_attr_xyz")
+        import_task("os.path@no_such_attr_xyz")

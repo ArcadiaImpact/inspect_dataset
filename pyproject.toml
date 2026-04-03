@@ -37,5 +37,6 @@ strict = true
 
 [dependency-groups]
 dev = [
+    "inspect-evals>=0.3.103",
     "pytest>=9.0.2",
 ]

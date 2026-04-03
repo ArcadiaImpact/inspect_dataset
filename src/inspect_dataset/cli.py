@@ -66,7 +66,7 @@ def scan(
 
     \b
       - A HuggingFace dataset path, e.g. flaviagiammarino/vqa-rad
-      - An inspect_ai task import path, e.g. inspect_evals.medqa:medqa
+      - An inspect_ai task import path, e.g. inspect_evals.medqa@medqa
     """
     console = Console()
 
@@ -92,8 +92,8 @@ def scan(
             for s in scanner_list
         ]
 
-    # Detect inspect_ai task import path (module:attr syntax)
-    is_task = ":" in dataset and "://" not in dataset
+    # Detect inspect_ai task import path (module@task syntax, mirrors inspect CLI)
+    is_task = "@" in dataset
 
     if is_task:
         console.print(f"Loading inspect_ai task [bold]{dataset}[/bold]...")
