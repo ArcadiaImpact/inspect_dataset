@@ -1,6 +1,6 @@
 [project]
 name = "inspect-dataset"
-version = "0.1.0"
+version = "0.1.2"
 description = "Dataset quality scanner for AI evaluation datasets"
 readme = "README.md"
 authors = [
@@ -11,13 +11,16 @@ dependencies = [
     "click>=8.0",
     "rich>=13.0",
     "datasets>=2.0",
-    "openai>=2.30.0",
 ]
 
 [project.scripts]
 inspect-dataset = "inspect_dataset.cli:cli"
 
 [project.optional-dependencies]
+inspect = [
+    "inspect-ai>=0.3",
+    "openai>=2.30.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",

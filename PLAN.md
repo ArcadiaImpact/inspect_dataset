@@ -5,7 +5,7 @@ A dataset quality scanner for AI evaluation datasets. Companion to
 agent trajectories — inspect-dataset scans the underlying datasets themselves.
 
 **Organisation:** Arcadia  
-**Status:** v0.1.1 complete
+**Status:** v0.1.2 complete
 
 ---
 
@@ -131,57 +131,43 @@ gaps in the built-in scanners and one needed improvement:
 - [x] Tests: unit tests for each scanner
 - [x] README
 
-### v0.1.2 — inspect.Task / inspect.Dataset input (planned)
+### v0.1.2 — inspect.Task / inspect.Dataset input ✓
 
-Currently the only input source is a HuggingFace dataset slug or a local
-CSV/JSON file. Many real-world evaluation datasets are defined as `inspect_ai`
-Task objects (e.g. in `inspect_evals`) and are loaded as `inspect.Dataset`
-instances rather than raw HF datasets.
-
-**New input path:** accept a Python importable Task function or Task object and
-extract its dataset:
-
-```python
-# Python API
-from inspect_evals.medqa import medqa
-from inspect_dataset import scan_task
-
-results = scan_task(medqa)          # calls medqa(), reads task.dataset
-results = scan_task(medqa())        # pre-instantiated Task also accepted
-```
+`inspect_ai` Task objects (e.g. from `inspect_evals`) are now accepted as a
+scan source alongside HuggingFace slugs. Four spec formats are supported:
 
 ```bash
-# CLI: module@task syntax (mirrors the file@task_name convention in inspect CLI)
-inspect-dataset scan inspect_evals.medqa@medqa \
-  --split test \
-  -o findings/
+inspect-dataset scan inspect_evals/gpqa_diamond      # package/task (recommended)
+inspect-dataset scan inspect_evals.gpqa@gpqa_diamond # module@fn
+inspect-dataset scan path/to/task.py@task_fn         # file@fn (via inspect_ai)
+inspect-dataset scan flaviagiammarino/vqa-rad        # HF slug (unchanged)
 ```
 
-`inspect.Dataset` yields `inspect.Sample` objects with `input` (str or
-list[ChatMessage]), `target` (str | list[str]), `id`, `metadata`, and `files`
-(dict of name → bytes, e.g. images). The loader maps these to the internal
-`Record` / `FieldMap` format:
+`inspect.Sample` fields are mapped to the internal `Record`/`FieldMap` format:
 
 | `inspect.Sample` field | maps to |
 | ---------------------- | ------- |
-| `input` (str) or last user message | `question` |
+| `input` (str or last user ChatMessage) | `question` |
 | `target` (first element if list) | `answer` |
 | `id` | sample id |
-| `metadata` | passed through to record |
-| `files` | available to the view server for inline rendering |
+| `metadata` | merged into record |
+| `files` | stored under `__files__` for view server |
 
-The field auto-detection in `loader.py` already handles HF column guessing;
-the Task path bypasses that and maps directly.
+The `package/task` path imports `package.task_name` directly and scans for
+`@task`-decorated callables, bypassing the inspect_ai entry-point loader
+(which requires all optional eval dependencies to be installed). Detection of
+task specs vs HF slugs uses `importlib.util.find_spec` — if the left side of
+`/` is an installed Python package, it's treated as a task spec.
 
-- [ ] `loader.py`: `load_inspect_task(task_or_fn) -> list[Record]` — imports
-  task, calls it if callable, iterates `task.dataset`
-- [ ] `loader.py`: `InspectSampleRecord` wrapper preserving `files` for the
-  view server
-- [ ] CLI: detect `module:attr` syntax as task path vs. HF slug vs. file path
-- [ ] `scan_summary.json`: record source type (`hf` | `inspect_task` | `file`)
-  and task import path so `view` can reload samples on demand
-- [ ] View server: serve `files` bytes for inline image rendering when source
-  is an inspect task
+- [x] `loader.py`: `load_inspect_task()`, `load_task_from_spec()` — converts
+  `inspect.Sample` to `Record`; handles `str` input, `list[ChatMessage]`,
+  `list[ContentBlock]`, and dict messages
+- [x] `loader.py`: `files` preserved under `__files__` for view server
+- [x] CLI: `find_spec`-based heuristic detects task specs vs HF slugs;
+  `module@fn` and `package/task` both routed correctly
+- [ ] `scan_summary.json`: record source type and import path (needed for view
+  server to reload samples on demand) — deferred to v0.4
+- [ ] View server: serve `__files__` bytes for inline rendering — deferred to v0.4
 
 ### v0.2 — LLM scanners (planned)
 
@@ -350,8 +336,11 @@ inspect-dataset scan flaviagiammarino/vqa-rad \
   --question-field question \
   -o findings/
 
-# Scan an inspect_ai Task (v0.1.2) — module@task import path
-inspect-dataset scan inspect_evals.medqa@medqa -o findings/
+# Scan an inspect_ai Task — package/task (recommended)
+inspect-dataset scan inspect_evals/gpqa_diamond -o findings/
+
+# Or with explicit module@fn syntax
+inspect-dataset scan inspect_evals.gpqa@gpqa_diamond -o findings/
 
 # Limit to specific scanners
 inspect-dataset scan ... --scanners answer_length,duplicate_questions
