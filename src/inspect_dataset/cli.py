@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import click
+from dotenv import load_dotenv
 from rich.console import Console
 
 from inspect_dataset.loader import load_hf_dataset, load_task_from_spec, resolve_fields
@@ -19,6 +20,10 @@ from inspect_dataset.scanners import (
 @click.group()
 def cli() -> None:
     """inspect-dataset — dataset quality scanner for AI evaluation benchmarks."""
+    # Load .env files (cwd first, then home), mirroring inspect_ai behaviour.
+    # Existing env vars take precedence.
+    load_dotenv(dotenv_path=Path.cwd() / ".env", override=False)
+    load_dotenv(dotenv_path=Path.home() / ".env", override=False)
 
 
 @cli.command()
@@ -59,10 +64,12 @@ def cli() -> None:
 @click.option(
     "--model",
     default=None,
+    envvar="INSPECT_DATASET_MODEL",
     help=(
         "LLM model for AI-powered scanners "
         "(e.g. openai/gpt-4o-mini). Enables: "
         "ambiguity, label_correctness, answerability. "
+        "[env: INSPECT_DATASET_MODEL]"
     ),
 )
 @click.option(
