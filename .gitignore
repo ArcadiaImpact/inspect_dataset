@@ -9,5 +9,8 @@ wheels/
 # Virtual environments
 .venv
 
+# Mac OS
+.DS_Store
+
 # inspect-dataset generated files
 findings/
