@@ -222,6 +222,69 @@ def scan(
         console.print(f"Findings saved to [bold]{out}[/bold]")
 
 
+@cli.command(name="tasks")
+def list_tasks() -> None:
+    """List inspect_ai tasks available via installed packages."""
+    from rich.table import Table
+
+    try:
+        from inspect_ai._util.entrypoints import ensure_entry_points
+        from inspect_ai._util.registry import (
+            registry_find,
+            registry_info,
+        )
+    except ImportError:
+        raise click.ClickException(
+            "inspect_ai is required for this command. "
+            "Install it with: pip install 'inspect-dataset[inspect]'"
+        )
+
+    ensure_entry_points()
+    tasks = registry_find(lambda info: info.type == "task")
+
+    console = Console()
+    if not tasks:
+        console.print("No inspect_ai tasks found.")
+        return
+
+    table = Table(title=f"inspect_ai Tasks ({len(tasks)} registered)")
+    table.add_column("Name", style="bold")
+    table.add_column("Package")
+
+    rows: list[tuple[str, str]] = []
+    for t in tasks:
+        info = registry_info(t)
+        name = info.name
+        package = name.split("/")[0] if "/" in name else ""
+        rows.append((name, package))
+
+    for name, package in sorted(rows):
+        table.add_row(name, package)
+
+    console.print(table)
+
+
+@cli.command(name="scanners")
+def list_scanners() -> None:
+    """List all registered scanners."""
+    from rich.table import Table
+
+    console = Console()
+    table = Table(title="Registered Scanners")
+    table.add_column("Scanner", style="bold")
+    table.add_column("Type")
+    table.add_column("Description")
+
+    for s in BUILTIN_SCANNERS:
+        table.add_row(s.name, "static", s.description)
+    for name, factory in LLM_SCANNER_FACTORIES.items():
+        # Build a temporary instance to read its description
+        desc = factory("_placeholder").description
+        table.add_row(name, "llm", desc)
+
+    console.print(table)
+
+
 @cli.command()
 @click.argument("findings_dir", type=click.Path(exists=True))
 def report(findings_dir: str) -> None:
