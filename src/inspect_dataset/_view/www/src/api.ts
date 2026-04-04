@@ -1,4 +1,4 @@
-import type { Finding, Sample, Summary, TriageStatus } from "./types";
+import type { Finding, Sample, SampleDetail, Summary, TriageStatus } from "./types";
 
 const BASE = "/api";
 
@@ -31,4 +31,14 @@ export async function fetchSamples(): Promise<Sample[]> {
 
 export function exportUrl(): string {
   return `${BASE}/export`;
+}
+
+export async function fetchSampleDetail(idx: number): Promise<SampleDetail | null> {
+  try {
+    const res = await fetch(`${BASE}/sample/${idx}`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
 }

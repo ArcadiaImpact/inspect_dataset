@@ -344,3 +344,18 @@ def test_api_sample_invalid_idx(server_url: str) -> None:
         assert False, "Expected HTTPError"
     except urllib.error.HTTPError as e:
         assert e.code == 400
+
+
+def test_finding_detail_shows_sample_content(page, server_url: str) -> None:
+    """Selecting a finding loads the sample Q/A into the detail panel."""
+    page.goto(server_url)
+    page.wait_for_selector("[data-finding-id]")
+
+    # Click the first finding (sample_index=0, question="Q0?", answer="A0")
+    page.click("[data-finding-id]:first-child")
+    page.wait_for_timeout(600)
+
+    detail_text = page.text_content(".border-start")
+    # Sample section should contain the question and answer from samples.json
+    assert "Q0?" in detail_text
+    assert "A0" in detail_text
