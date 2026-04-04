@@ -5,7 +5,7 @@ A dataset quality scanner for AI evaluation datasets. Companion to
 agent trajectories — inspect-dataset scans the underlying datasets themselves.
 
 **Organisation:** Arcadia  
-**Status:** v0.2.0 complete
+**Status:** v0.3.1 complete
 
 ---
 
@@ -199,7 +199,7 @@ Scanners:
 - [x] LLM scanner registry (`LLM_SCANNER_FACTORIES`) + CLI wiring
 - [x] Tests for all three scanners (mocked LLM calls)
 
-### v0.3 — Interactive dataset explorer (planned)
+### v0.3 — Interactive dataset explorer ✓
 
 A local web UI for triaging findings — findings-first navigation rather than
 data-first. The goal is to let a researcher work through flagged samples quickly,
@@ -337,6 +337,85 @@ re-opening the HF dataset with the same parameters recorded in
 - Consider whether the `@meridianlabs/log-viewer` library's `MetadataPanel` or
   `JsonPanel` components can be imported for the raw-record display rather than
   re-implementing them
+
+### v0.3.2 — Meaningful URLs (planned)
+
+The SPA currently ignores URL entirely — tab switches don't update the address
+bar and there is no way to share or deep-link to a particular view. Fix this so
+the URL is always a faithful representation of UI state.
+
+**Routing scheme:**
+
+| URL | State |
+| --- | ----- |
+| `/` or `/findings` | Findings tab, no filters |
+| `/findings?scanner=answer_length&severity=high&triage=pending` | Filtered |
+| `/samples` | Samples tab |
+
+The dataset is encoded in the server (one server = one findings dir), so it
+does not need to appear in the path. If multi-dataset support is added
+(v0.3.3), the dataset slug moves into the path (see below).
+
+**Implementation notes:**
+
+- Use React Router (`react-router-dom`) with `BrowserRouter`; the aiohttp
+  `_WWWResource` already serves `index.html` for all non-API paths, so no
+  server changes needed
+- Zustand URL sync: on mount, read initial filter state from
+  `useSearchParams`; on filter change, push to history with `useNavigate` /
+  `URLSearchParams`
+- Tab state maps to `/findings` vs `/samples` pathname
+- Back/forward navigation should restore filter state
+
+### v0.3.3 — Multi-dataset support (planned)
+
+Allow the viewer to serve and switch between several findings directories
+without restarting the server. Useful when comparing scans of the same dataset
+at different revisions, or scans of multiple related datasets in a session.
+
+**Invocation:**
+
+```bash
+# Single dir — existing behaviour, unchanged
+inspect-dataset view findings/
+
+# Parent dir containing multiple findings dirs
+inspect-dataset view results/
+
+# Explicit list
+inspect-dataset view results/vqa-rad/ results/medqa/ results/gpqa/
+```
+
+The server detects whether the argument(s) are individual findings dirs
+(contain `scan_summary.json`) or parent dirs and expands them automatically.
+
+**URL scheme (builds on v0.3.2):**
+
+| URL | State |
+| --- | ----- |
+| `/` | Dataset picker (home screen) |
+| `/<dataset-slug>/findings` | Findings tab for that dataset |
+| `/<dataset-slug>/samples` | Samples tab for that dataset |
+
+`<dataset-slug>` is derived from `scan_summary.json → dataset_name` (slashes
+replaced with `--`, e.g. `flaviagiammarino--vqa-rad`).
+
+**API changes:**
+
+| Endpoint | Change |
+| -------- | ------ |
+| `GET /api/datasets` | New — list all datasets (name, slug, counts) |
+| `GET /api/<slug>/summary` | Namespaced per dataset |
+| `GET /api/<slug>/findings` | Namespaced per dataset |
+| `GET /api/<slug>/samples` | Namespaced per dataset |
+| `POST /api/<slug>/triage` | Namespaced per dataset |
+| `GET /api/<slug>/export` | Namespaced per dataset |
+
+**UI additions:**
+
+- Home screen: card grid of available datasets with scanner/severity summary
+- Dataset picker in the navbar header — dropdown to switch without going home
+- Each dataset has its own `triage.json` (already the case for separate dirs)
 
 ### v0.4 — Eval-informed scanners (inspect-scout integration, planned)
 

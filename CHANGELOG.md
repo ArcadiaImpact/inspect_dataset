@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-04-04
+
+### Added
+
+- **Samples tab shows question and answer content** — the Samples tab now
+  displays Question and Answer columns (truncated with full-text tooltip),
+  matching the HuggingFace dataset viewer style.
+- `save_findings()` writes `samples.json` alongside scanner output when
+  `records` and `fields` are provided; the view server loads it on startup.
+- `Sample` TypeScript interface added to `types.ts`.
+- `GET /api/samples` endpoint added to the view server.
+- `fetchSamples()` added to the API client; degrades gracefully (returns `[]`)
+  when `samples.json` is absent, so existing findings dirs still work.
+- Test fixture extended with `samples.json`; `_create_fixture()` generates it.
+
 ## [0.3.0] - 2026-04-04
 
 ### Added
