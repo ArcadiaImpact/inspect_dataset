@@ -1,0 +1,11 @@
+[
+  {
+    "scanner": "inconsistent_format",
+    "severity": "medium",
+    "category": "format",
+    "explanation": "Answer not capitalised consistently.",
+    "sample_index": 4,
+    "sample_id": "q4",
+    "metadata": {}
+  }
+]

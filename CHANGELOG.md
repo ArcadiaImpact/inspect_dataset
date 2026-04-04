@@ -7,12 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-04
+
 ### Added
 
+- **Interactive dataset explorer** (`inspect-dataset view <findings_dir>`):
+  - aiohttp backend serving API endpoints and a single-page app.
+  - Findings tab with scanner sidebar, severity/triage filters, and detail panel.
+  - Samples tab with AG Grid table showing per-sample finding badges.
+  - Triage actions (confirm/dismiss) with persistence to `triage.json`.
+  - Keyboard shortcuts: `c` confirm, `d` dismiss, `n`/`p` next/prev finding.
+  - `clean_ids.txt` export of sample IDs with no confirmed findings.
+  - SPA-aware static serving with cache-busting headers (mirrors `inspect_ai` pattern).
+- Frontend built with Vite, React, TypeScript, Bootstrap 5, AG Grid, Zustand.
+- Playwright end-to-end tests for the view server (10 tests).
 - `inspect-dataset tasks` command to list all registered `inspect_ai` tasks.
 - `inspect-dataset scanners` command to list all registered scanners.
 - `INSPECT_DATASET_MODEL` environment variable support for setting the default
   LLM model; `.env` files in cwd and home directory are loaded automatically.
+- `aiohttp` added as a core dependency.
+- `playwright` and `pytest-playwright` added to dev dependencies.
 
 ## [0.2.0] - 2026-04-03
 
