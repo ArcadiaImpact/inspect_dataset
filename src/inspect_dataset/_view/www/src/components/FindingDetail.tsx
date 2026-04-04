@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useStore, getFilteredFindings } from "../store";
-import type { TriageStatus } from "../types";
+import { fetchSampleDetail } from "../api";
+import type { SampleDetail, TriageStatus } from "../types";
 
 export function FindingDetail() {
   const finding = useStore((s) => s.selectedFinding);
@@ -8,6 +10,19 @@ export function FindingDetail() {
   const findings = useStore((s) => s.findings);
   const setSelectedFinding = useStore((s) => s.setSelectedFinding);
   const [searchParams] = useSearchParams();
+
+  const [sampleDetail, setSampleDetail] = useState<SampleDetail | null>(null);
+  const [sampleLoading, setSampleLoading] = useState(false);
+
+  useEffect(() => {
+    if (finding == null) return;
+    setSampleDetail(null);
+    setSampleLoading(true);
+    fetchSampleDetail(finding.sample_index).then((d) => {
+      setSampleDetail(d);
+      setSampleLoading(false);
+    });
+  }, [finding?.sample_index]);
 
   if (!finding) {
     return (
@@ -43,11 +58,17 @@ export function FindingDetail() {
     if (next !== idx) setSelectedFinding(filtered[next]);
   };
 
+  const allImages = [
+    ...(sampleDetail?.images ?? []).map((img) => ({ src: img.data_url, label: img.field })),
+    ...(sampleDetail?.files ?? []).map((f) => ({ src: f.data_url, label: f.name })),
+  ];
+
   return (
     <div
       className="border-start d-flex flex-column"
       style={{ width: 380, minWidth: 380, overflowY: "auto" }}
     >
+      {/* Finding header */}
       <div className="p-3 border-bottom">
         <div className="d-flex justify-content-between align-items-start mb-2">
           <div>
@@ -58,10 +79,10 @@ export function FindingDetail() {
             Sample #{finding.sample_index}
           </span>
         </div>
-
         <p className="mb-0">{finding.explanation}</p>
       </div>
 
+      {/* Finding metadata */}
       {finding.metadata && Object.keys(finding.metadata).length > 0 && (
         <div className="p-3 border-bottom">
           <h6 className="text-uppercase text-body-secondary small mb-2">
@@ -82,6 +103,39 @@ export function FindingDetail() {
         </div>
       )}
 
+      {/* Sample content */}
+      <div className="p-3 border-bottom">
+        <h6 className="text-uppercase text-body-secondary small mb-2">
+          Sample
+        </h6>
+        {sampleLoading ? (
+          <div className="text-body-secondary small">Loading…</div>
+        ) : sampleDetail ? (
+          <>
+            <div className="mb-2 small">
+              <span className="text-body-secondary fw-semibold">Q: </span>
+              {sampleDetail.question}
+            </div>
+            <div className="mb-2 small">
+              <span className="text-body-secondary fw-semibold">A: </span>
+              <span className="font-monospace">{sampleDetail.answer}</span>
+            </div>
+            {allImages.map((img) => (
+              <img
+                key={img.label}
+                src={img.src}
+                alt={img.label}
+                className="img-fluid rounded mb-1 d-block"
+                style={{ maxHeight: 240 }}
+              />
+            ))}
+          </>
+        ) : (
+          <div className="text-body-secondary small">No sample data.</div>
+        )}
+      </div>
+
+      {/* Triage */}
       <div className="p-3 border-bottom">
         <h6 className="text-uppercase text-body-secondary small mb-2">
           Triage
@@ -114,6 +168,7 @@ export function FindingDetail() {
         </div>
       </div>
 
+      {/* Navigation */}
       <div className="p-3 d-flex justify-content-between">
         <button
           className="btn btn-sm btn-outline-secondary"

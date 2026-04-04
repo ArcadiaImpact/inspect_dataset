@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-04-04
+
+### Added
+
+- **Inline image rendering in the FindingDetail panel** — selecting a finding
+  now shows the sample's question, answer, and any images directly in the
+  right-hand panel. Images are loaded on demand from the original source; no
+  bytes are re-serialised to disk.
+  - HuggingFace datasets: image columns (stored as `{"bytes": ..., "path": ...}`
+    dicts) are served straight from the HF cache via `GET /api/sample/{idx}`.
+  - `inspect_ai` tasks: `Sample.files` bytes stored under `__files__` are
+    served the same way.
+  - MIME type detected from file extension (via `mimetypes`) or magic bytes
+    (JPEG, PNG, GIF, WebP), returned as base64 data URLs.
+  - Dataset is lazy-loaded on first image request and cached in the server
+    process; subsequent requests are instant.
+  - Graceful fallback for old findings dirs (no `source_type`) and for
+    datasets that cannot be re-loaded: question/answer still shown, images
+    omitted.
+- **`source_type` and `revision` in `scan_summary.json`** — every scan now
+  records `source_type` (`"hf"` or `"inspect_task"`) and the HF `revision`
+  (or `null`). The view server uses these to re-open the original dataset for
+  image serving.
+- `GET /api/sample/{idx}` endpoint — returns `{index, question, answer, id,
+  images, files}` for one record. `images` and `files` are lists of
+  `{field/name, data_url}` objects.
+- `SampleDetail`, `SampleImage`, `SampleFile` TypeScript interfaces.
+- `fetchSampleDetail(idx)` API helper.
+
 ## [0.3.2] - 2026-04-04
 
 ### Added

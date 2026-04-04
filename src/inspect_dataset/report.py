@@ -100,6 +100,8 @@ def save_findings(
     summary = {
         "dataset_name": run.dataset_name,
         "split": run.split,
+        "source_type": run.source_type,
+        "revision": run.revision,
         "total_samples": run.total_samples,
         "total_findings": len(run.findings),
         "by_scanner": {

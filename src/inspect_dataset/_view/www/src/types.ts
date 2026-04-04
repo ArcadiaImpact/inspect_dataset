@@ -23,6 +23,25 @@ export interface Sample {
 
 export type TriageStatus = "pending" | "confirmed" | "dismissed";
 
+export interface SampleImage {
+  field: string;
+  data_url: string;
+}
+
+export interface SampleFile {
+  name: string;
+  data_url: string;
+}
+
+export interface SampleDetail {
+  index: number;
+  question: string;
+  answer: string;
+  id?: string | number | null;
+  images: SampleImage[];
+  files: SampleFile[];
+}
+
 export interface Finding {
   id: number;
   scanner: string;
