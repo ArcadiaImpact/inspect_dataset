@@ -194,6 +194,8 @@ def scan(
             f"(model: [bold]{model}[/bold])"
         )
 
+    source_type = "inspect_task" if is_task else "hf"
+
     if llm_scanners:
         import asyncio
 
@@ -204,6 +206,8 @@ def scan(
                 all_scanners,
                 dataset_name=dataset,
                 split=split,
+                source_type=source_type,
+                revision=revision,
             )
         )
     else:
@@ -213,6 +217,8 @@ def scan(
             scanner_list,
             dataset_name=dataset,
             split=split,
+            source_type=source_type,
+            revision=revision,
         )
 
     print_report(run, console=console)
