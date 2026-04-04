@@ -17,3 +17,4 @@ wheels/
 
 # inspect-dataset generated files
 findings/
+.worktrees/
