@@ -8,7 +8,7 @@ from rich.console import Console
 
 from inspect_dataset.loader import load_hf_dataset, load_task_from_spec, resolve_fields
 from inspect_dataset.report import print_report, save_findings
-from inspect_dataset.scanner import run_scanners, run_scanners_async
+from inspect_dataset.scanner import AnyScanner, run_scanners, run_scanners_async
 from inspect_dataset.scanners import (
     ALL_SCANNER_NAMES,
     BUILTIN_SCANNER_NAMES,
@@ -113,6 +113,7 @@ def scan(
     console = Console()
 
     # Resolve scanners
+    scanner_list: list[AnyScanner]
     if scanners:
         names = [n.strip() for n in scanners.split(",")]
         unknown = [n for n in names if n not in ALL_SCANNER_NAMES]
@@ -283,6 +284,45 @@ def list_scanners() -> None:
         table.add_row(name, "llm", desc)
 
     console.print(table)
+
+
+@cli.command(name="view")
+@click.argument("findings_dir", type=click.Path(exists=True))
+@click.option(
+    "--port",
+    default=7576,
+    show_default=True,
+    help="Port for the local viewer server.",
+)
+@click.option(
+    "--no-open",
+    is_flag=True,
+    default=False,
+    help="Don't automatically open the browser.",
+)
+def view(findings_dir: str, port: int, no_open: bool) -> None:
+    """Launch the interactive dataset explorer.
+
+    FINDINGS_DIR is a directory produced by `inspect-dataset scan -o <dir>`.
+    """
+    import webbrowser
+
+    from inspect_dataset._view.server import create_app, run_server
+
+    console = Console()
+
+    try:
+        create_app(findings_dir)  # validate before starting
+    except FileNotFoundError as e:
+        raise click.ClickException(str(e))
+
+    url = f"http://localhost:{port}"
+    console.print(f"Starting viewer at [bold]{url}[/bold] (findings: {findings_dir})")
+
+    if not no_open:
+        webbrowser.open(url)
+
+    run_server(findings_dir, port=port)
 
 
 @cli.command()

@@ -118,11 +118,11 @@ async def run_scanners_async(
     # Run async (LLM) scanners concurrently
     async_scanners = [s for s in scanners if isinstance(s, LLMScannerDef)]
     if async_scanners:
-        tasks = [scanner(records, fields) for scanner in async_scanners]
+        tasks = [s(records, fields) for s in async_scanners]
         results = await asyncio.gather(*tasks)
-        for scanner, findings in zip(async_scanners, results):
+        for llm_scanner, findings in zip(async_scanners, results):
             for f in findings:
-                f.scanner = scanner.name
+                f.scanner = llm_scanner.name
             all_findings.extend(findings)
 
     return ScanRun(

@@ -54,7 +54,7 @@ def load_hf_dataset(
     as-is — scanners that don't need them will simply ignore them.
     """
     try:
-        from datasets import load_dataset  # type: ignore[import-untyped]
+        from datasets import load_dataset
     except ImportError:
         raise ImportError(
             "The 'datasets' package is required to load HuggingFace datasets. "
