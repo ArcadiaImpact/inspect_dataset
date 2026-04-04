@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+from datetime import datetime
 from pathlib import Path
 
 import click
@@ -84,7 +86,7 @@ def cli() -> None:
     "--output-dir",
     default=None,
     type=click.Path(),
-    help="Save findings JSON + REPORT.md to this directory.",
+    help="Save findings JSON + REPORT.md to this directory (default: findings/<dataset>_<YYYY-MM-DDTHH-MM-SS>).",
 )
 def scan(
     dataset: str,
@@ -223,10 +225,14 @@ def scan(
 
     print_report(run, console=console)
 
-    if output_dir:
-        out = Path(output_dir)
-        save_findings(run, out, records=records, fields=fields)
-        console.print(f"Findings saved to [bold]{out}[/bold]")
+    if output_dir is None:
+        slug = re.sub(r"[^a-z0-9]+", "-", dataset.split("/")[-1].lower()).strip("-")
+        timestamp = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+        output_dir = f"findings/{slug}_{timestamp}"
+
+    out = Path(output_dir)
+    save_findings(run, out, records=records, fields=fields)
+    console.print(f"Findings saved to [bold]{out}[/bold]")
 
 
 @cli.command(name="tasks")
