@@ -165,9 +165,11 @@ task specs vs HF slugs uses `importlib.util.find_spec` — if the left side of
 - [x] `loader.py`: `files` preserved under `__files__` for view server
 - [x] CLI: `find_spec`-based heuristic detects task specs vs HF slugs;
   `module@fn` and `package/task` both routed correctly
-- [ ] `scan_summary.json`: record source type and import path (needed for view
-  server to reload samples on demand) — deferred to v0.4
-- [ ] View server: serve `__files__` bytes for inline rendering — deferred to v0.4
+- [x] `scan_summary.json`: record source type and import path — `source_type`
+  (`"hf"` | `"inspect_task"`) and `revision` written by `report.py:save_findings()`
+- [x] View server: serve `__files__` bytes for inline rendering — `GET
+  /api/sample/{idx}` lazy-loads the original dataset (HF cache or inspect task)
+  and returns image bytes as base64 data URLs
 
 ### v0.2 — LLM scanners ✓
 
@@ -321,8 +323,9 @@ re-opening the HF dataset with the same parameters recorded in
 - [ ] React SPA (Vite, Bootstrap 5, ag-grid) — two-tab layout
 - [ ] Findings tab: finding list with filter/sort; sample detail panel
 - [ ] Samples tab: ag-grid table of all records with findings badges; side panel
-- [ ] Sample panel: renders question/answer/image fields; side-by-side for
-  duplicate groups; handles both HF `Image` and `inspect.Sample` `files`
+- [x] Sample panel: renders question/answer/image fields inline in FindingDetail;
+  handles both HF `Image` columns and `inspect.Sample` `files`; side-by-side
+  for duplicate groups deferred
 - [ ] Triage actions (confirm/dismiss/skip) persisted to `triage.json`
 - [ ] `clean_ids.txt` export — sample IDs with no confirmed findings
 - [ ] Keyboard shortcut layer
@@ -416,6 +419,23 @@ replaced with `--`, e.g. `flaviagiammarino--vqa-rad`).
 - Home screen: card grid of available datasets with scanner/severity summary
 - Dataset picker in the navbar header — dropdown to switch without going home
 - Each dataset has its own `triage.json` (already the case for separate dirs)
+
+### v0.3.4 — Auto-generated output directory (planned)
+
+When `--output-dir` is omitted, `scan` currently prints findings to the terminal
+only and discards them. Instead, default to creating a directory automatically so
+results are always persisted without requiring an explicit flag.
+
+**Default path:** `findings/<dataset-slug>_<YYYYMMDD_HHMMSS>` — e.g.
+`findings/vqa-rad_20260404_143021`. The dataset slug strips the owner prefix and
+replaces non-alphanumeric characters with hyphens
+(`flaviagiammarino/vqa-rad` → `vqa-rad`).
+
+- [ ] `cli.py`: derive default `output_dir` from dataset name + `datetime.now()`
+  when `--output-dir` is not supplied; print the resolved path so the user
+  knows where findings landed
+- [ ] Ensure `findings/` parent is created if it doesn't exist (already handled
+  by `save_findings` → `output_dir.mkdir(parents=True, exist_ok=True)`)
 
 ### v0.4 — Eval-informed scanners (inspect-scout integration, planned)
 
