@@ -5,7 +5,7 @@ A dataset quality scanner for AI evaluation datasets. Companion to
 agent trajectories — inspect-dataset scans the underlying datasets themselves.
 
 **Organisation:** Arcadia  
-**Status:** v0.3.2 complete
+**Status:** v0.3.4 complete
 
 ---
 
@@ -317,18 +317,18 @@ re-opening the HF dataset with the same parameters recorded in
 
 #### Implementation tasks
 
-- [ ] `inspect-dataset view findings/` CLI command (click, mirrors inspect's
+- [x] `inspect-dataset view findings/` CLI command (click, mirrors inspect's
   `view start` pattern)
-- [ ] aiohttp server with the endpoints above; port-file management
-- [ ] React SPA (Vite, Bootstrap 5, ag-grid) — two-tab layout
-- [ ] Findings tab: finding list with filter/sort; sample detail panel
-- [ ] Samples tab: ag-grid table of all records with findings badges; side panel
+- [x] aiohttp server with the endpoints above; port-file management
+- [x] React SPA (Vite, Bootstrap 5, ag-grid) — two-tab layout
+- [x] Findings tab: finding list with filter/sort; sample detail panel
+- [x] Samples tab: ag-grid table of all records with findings badges; side panel
 - [x] Sample panel: renders question/answer/image fields inline in FindingDetail;
   handles both HF `Image` columns and `inspect.Sample` `files`; side-by-side
   for duplicate groups deferred
-- [ ] Triage actions (confirm/dismiss/skip) persisted to `triage.json`
-- [ ] `clean_ids.txt` export — sample IDs with no confirmed findings
-- [ ] Keyboard shortcut layer
+- [x] Triage actions (confirm/dismiss) persisted to `triage.json`
+- [x] `clean_ids.txt` export — sample IDs with no confirmed findings
+- [x] Keyboard shortcut layer (c/d/n/p)
 
 #### Reuse opportunities
 
