@@ -370,7 +370,7 @@ does not need to appear in the path. If multi-dataset support is added
 - Tab state maps to `/findings` vs `/samples` pathname
 - Back/forward navigation should restore filter state
 
-### v0.3.3 — Multi-dataset support (planned)
+### v0.3.3 — Multi-dataset support ✓
 
 Allow the viewer to serve and switch between several findings directories
 without restarting the server. Useful when comparing scans of the same dataset
@@ -420,21 +420,18 @@ replaced with `--`, e.g. `flaviagiammarino--vqa-rad`).
 - Dataset picker in the navbar header — dropdown to switch without going home
 - Each dataset has its own `triage.json` (already the case for separate dirs)
 
-### v0.3.4 — Auto-generated output directory (planned)
+### v0.3.4 — Auto-generated output directory ✓
 
-When `--output-dir` is omitted, `scan` currently prints findings to the terminal
-only and discards them. Instead, default to creating a directory automatically so
+When `--output-dir` is omitted, `scan` now creates a directory automatically so
 results are always persisted without requiring an explicit flag.
 
-**Default path:** `findings/<dataset-slug>_<YYYYMMDD_HHMMSS>` — e.g.
-`findings/vqa-rad_20260404_143021`. The dataset slug strips the owner prefix and
-replaces non-alphanumeric characters with hyphens
-(`flaviagiammarino/vqa-rad` → `vqa-rad`).
+**Default path:** `findings/<dataset-slug>_<YYYY-MM-DDTHH-MM-SS>` — e.g.
+`findings/vqa-rad_2026-04-04T14-30-21`.
 
-- [ ] `cli.py`: derive default `output_dir` from dataset name + `datetime.now()`
+- [x] `cli.py`: derive default `output_dir` from dataset name + `datetime.now()`
   when `--output-dir` is not supplied; print the resolved path so the user
   knows where findings landed
-- [ ] Ensure `findings/` parent is created if it doesn't exist (already handled
+- [x] Ensure `findings/` parent is created if it doesn't exist (already handled
   by `save_findings` → `output_dir.mkdir(parents=True, exist_ok=True)`)
 
 ### v0.4 — Eval-informed scanners (inspect-scout integration, planned)

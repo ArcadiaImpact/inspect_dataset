@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { useStore, getFilteredFindings } from "../store";
 import { fetchSampleDetail } from "../api";
 import type { SampleDetail, TriageStatus } from "../types";
@@ -10,19 +10,20 @@ export function FindingDetail() {
   const findings = useStore((s) => s.findings);
   const setSelectedFinding = useStore((s) => s.setSelectedFinding);
   const [searchParams] = useSearchParams();
+  const { slug } = useParams<{ slug: string }>();
 
   const [sampleDetail, setSampleDetail] = useState<SampleDetail | null>(null);
   const [sampleLoading, setSampleLoading] = useState(false);
 
   useEffect(() => {
-    if (finding == null) return;
+    if (finding == null || !slug) return;
     setSampleDetail(null);
     setSampleLoading(true);
-    fetchSampleDetail(finding.sample_index).then((d) => {
+    fetchSampleDetail(slug, finding.sample_index).then((d) => {
       setSampleDetail(d);
       setSampleLoading(false);
     });
-  }, [finding?.sample_index]);
+  }, [finding?.sample_index, slug]);
 
   if (!finding) {
     return (

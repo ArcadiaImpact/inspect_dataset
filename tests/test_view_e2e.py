@@ -14,6 +14,9 @@ import pytest
 
 FINDINGS_DIR = Path(__file__).parent / "_fixtures" / "view_findings"
 
+# Slug derived from dataset_name "test/dataset" → "test--dataset"
+SLUG = "test--dataset"
+
 
 def _create_fixture() -> None:
     """Create a minimal findings directory for testing."""
@@ -140,7 +143,7 @@ def server_url():
     url = f"http://localhost:{port}"
     for _ in range(30):
         try:
-            urllib.request.urlopen(f"{url}/api/summary", timeout=1)
+            urllib.request.urlopen(f"{url}/api/datasets", timeout=1)
             break
         except Exception:
             time.sleep(0.3)
@@ -253,9 +256,6 @@ def test_keyboard_navigation(page, server_url: str) -> None:
     page.keyboard.press("n")
     page.wait_for_timeout(200)
 
-    second_text = page.text_content(".border-start")
-
-    # They could be different or same scanner, but navigation should work
     # Press 'p' to go back
     page.keyboard.press("p")
     page.wait_for_timeout(200)
@@ -279,11 +279,11 @@ def test_samples_tab(page, server_url: str) -> None:
 
 
 def test_export_link(page, server_url: str) -> None:
-    """The export link points to the API endpoint."""
+    """The export link points to the slug-namespaced API endpoint."""
     page.goto(server_url)
     page.wait_for_selector("a[download]")
     href = page.get_attribute("a[download]", "href")
-    assert href == "/api/export"
+    assert href == f"/api/{SLUG}/export"
 
 
 def test_severity_filter(page, server_url: str) -> None:
@@ -299,17 +299,30 @@ def test_severity_filter(page, server_url: str) -> None:
     # We have 2 high-severity findings (duplicate_questions)
     assert len(items) == 2
 
+
 # ---------------------------------------------------------------------------
 # API unit tests (no Playwright)
 # ---------------------------------------------------------------------------
 
 
-def test_api_sample_basic(server_url: str) -> None:
-    """GET /api/sample/{idx} returns basic sample fields from samples.json."""
-    import json
+def test_api_datasets(server_url: str) -> None:
+    """GET /api/datasets returns the dataset list."""
     import urllib.request
 
-    res = urllib.request.urlopen(f"{server_url}/api/sample/0")
+    res = urllib.request.urlopen(f"{server_url}/api/datasets")
+    data = json.loads(res.read())
+
+    assert len(data) == 1
+    assert data[0]["slug"] == SLUG
+    assert data[0]["dataset_name"] == "test/dataset"
+    assert data[0]["total_findings"] == 5
+
+
+def test_api_sample_basic(server_url: str) -> None:
+    """GET /api/{slug}/sample/{idx} returns basic sample fields from samples.json."""
+    import urllib.request
+
+    res = urllib.request.urlopen(f"{server_url}/api/{SLUG}/sample/0")
     data = json.loads(res.read())
 
     assert data["index"] == 0
@@ -321,11 +334,10 @@ def test_api_sample_basic(server_url: str) -> None:
 
 
 def test_api_sample_out_of_range(server_url: str) -> None:
-    """GET /api/sample/{idx} for an unknown index returns empty strings."""
-    import json
+    """GET /api/{slug}/sample/{idx} for an unknown index returns empty strings."""
     import urllib.request
 
-    res = urllib.request.urlopen(f"{server_url}/api/sample/999")
+    res = urllib.request.urlopen(f"{server_url}/api/{SLUG}/sample/999")
     data = json.loads(res.read())
 
     assert data["index"] == 999
@@ -335,12 +347,12 @@ def test_api_sample_out_of_range(server_url: str) -> None:
 
 
 def test_api_sample_invalid_idx(server_url: str) -> None:
-    """GET /api/sample/abc returns 400."""
+    """GET /api/{slug}/sample/abc returns 400."""
     import urllib.error
     import urllib.request
 
     try:
-        urllib.request.urlopen(f"{server_url}/api/sample/abc")
+        urllib.request.urlopen(f"{server_url}/api/{SLUG}/sample/abc")
         assert False, "Expected HTTPError"
     except urllib.error.HTTPError as e:
         assert e.code == 400

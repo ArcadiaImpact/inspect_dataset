@@ -1,6 +1,6 @@
 [project]
 name = "inspect-dataset"
-version = "0.3.3"
+version = "0.3.4"
 description = "Dataset quality scanner for AI evaluation datasets"
 readme = "README.md"
 authors = [

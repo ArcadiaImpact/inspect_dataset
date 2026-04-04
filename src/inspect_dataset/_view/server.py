@@ -81,16 +81,68 @@ def _to_data_url(data: bytes, path: str = "") -> str:
     return f"data:{mime};base64,{encoded}"
 
 
-async def _load_records_cached(app: web.Application) -> list[dict] | None:
-    """Lazy-load the original dataset records and cache them on the app.
+def _make_slug(dataset_name: str) -> str:
+    """flaviagiammarino/vqa-rad -> flaviagiammarino--vqa-rad"""
+    return dataset_name.replace("/", "--")
+
+
+def _load_dataset_dir(path: Path) -> dict[str, Any]:
+    """Load a single findings directory into a dataset state dict."""
+    summary_file = path / "scan_summary.json"
+    if not summary_file.exists():
+        raise FileNotFoundError(
+            f"No scan_summary.json in {path}. "
+            "Run `inspect-dataset scan ... -o <dir>` first."
+        )
+
+    summary = _load_json(summary_file)
+
+    # Load all scanner findings files (one per scanner, e.g. answer_length.json)
+    skip = {"scan_summary.json", "triage.json", "samples.json"}
+    all_findings: list[dict[str, Any]] = []
+    for f in sorted(path.glob("*.json")):
+        if f.name in skip:
+            continue
+        all_findings.extend(_load_json(f))
+
+    # Assign stable IDs to findings if not present
+    for i, finding in enumerate(all_findings):
+        finding.setdefault("id", i)
+
+    triage_file = path / "triage.json"
+    triage: dict[str, str] = {}
+    if triage_file.exists():
+        triage = _load_json(triage_file)
+
+    samples_file = path / "samples.json"
+    samples: list[dict[str, Any]] = []
+    if samples_file.exists():
+        samples = _load_json(samples_file)
+
+    slug = _make_slug(summary.get("dataset_name", path.name))
+
+    return {
+        "slug": slug,
+        "path": path,
+        "summary": summary,
+        "findings": all_findings,
+        "samples": samples,
+        "triage": triage,
+        "triage_file": triage_file,
+        "records_cache": None,
+    }
+
+
+async def _load_records_cached(ds: dict[str, Any]) -> list[dict] | None:
+    """Lazy-load the original dataset records and cache them in the dataset dict.
 
     Returns None (without raising) if the dataset cannot be loaded —
     callers fall back to samples.json data without images.
     """
-    if app.get("records_cache") is not None:
-        return app["records_cache"]  # type: ignore[return-value]
+    if ds.get("records_cache") is not None:
+        return ds["records_cache"]  # type: ignore[return-value]
 
-    summary = app["summary"]
+    summary = ds["summary"]
     source_type: str = summary.get("source_type", "")
     dataset_name: str = summary.get("dataset_name", "")
     split: str = summary.get("split") or "train"
@@ -113,69 +165,55 @@ async def _load_records_cached(app: web.Application) -> list[dict] | None:
         else:
             return None
 
-        app["records_cache"] = records
+        ds["records_cache"] = records
         return records
     except Exception as exc:
         logger.warning("Could not load dataset for image serving: %s", exc)
         return None
 
 
-def create_app(findings_dir: str | Path) -> web.Application:
-    """Create the aiohttp application for serving the explorer UI."""
-    findings_path = Path(findings_dir).resolve()
+def _get_dataset(request: web.Request) -> dict[str, Any]:
+    """Look up a dataset dict by slug from the URL, raising 404 if not found."""
+    slug = request.match_info["slug"]
+    datasets: dict[str, Any] = request.app["datasets"]
+    if slug not in datasets:
+        raise web.HTTPNotFound(reason=f"Dataset '{slug}' not found.")
+    return datasets[slug]
 
-    if not findings_path.exists():
-        raise FileNotFoundError(f"Findings directory not found: {findings_path}")
 
-    summary_file = findings_path / "scan_summary.json"
-    if not summary_file.exists():
-        raise FileNotFoundError(
-            f"No scan_summary.json in {findings_path}. "
-            "Run `inspect-dataset scan ... -o <dir>` first."
-        )
+def create_app(
+    findings_dirs: list[str | Path] | str | Path,
+) -> web.Application:
+    """Create the aiohttp application for serving the explorer UI.
 
-    summary = _load_json(summary_file)
-    triage_file = findings_path / "triage.json"
+    Accepts one or more findings directories.  A single string/Path is treated
+    as a list of one.
+    """
+    if isinstance(findings_dirs, (str, Path)):
+        findings_dirs = [findings_dirs]
 
-    # Load all scanner findings files (one per scanner, e.g. answer_length.json)
-    skip = {"scan_summary.json", "triage.json", "samples.json"}
-    all_findings: list[dict[str, Any]] = []
-    for f in sorted(findings_path.glob("*.json")):
-        if f.name in skip:
-            continue
-        all_findings.extend(_load_json(f))
+    datasets: dict[str, Any] = {}
+    for d in findings_dirs:
+        ds = _load_dataset_dir(Path(d).resolve())
+        datasets[ds["slug"]] = ds
 
-    # Assign stable IDs to findings if not present
-    for i, finding in enumerate(all_findings):
-        finding.setdefault("id", i)
-
-    # Load or init triage state
-    triage: dict[str, str] = {}
-    if triage_file.exists():
-        triage = _load_json(triage_file)
+    if not datasets:
+        raise FileNotFoundError("No valid findings directories found.")
 
     app = web.Application()
-    # Load samples data if available
-    samples_file = findings_path / "samples.json"
-    samples: list[dict[str, Any]] = []
-    if samples_file.exists():
-        samples = _load_json(samples_file)
+    app["datasets"] = datasets
 
-    app["findings_path"] = findings_path
-    app["summary"] = summary
-    app["findings"] = all_findings
-    app["samples"] = samples
-    app["triage"] = triage
-    app["triage_file"] = triage_file
-    app["records_cache"] = None
+    # Dataset list
+    app.router.add_get("/api/datasets", handle_datasets)
 
-    app.router.add_get("/api/summary", handle_summary)
-    app.router.add_get("/api/samples", handle_samples)
-    app.router.add_get("/api/findings", handle_findings)
-    app.router.add_get("/api/triage", handle_get_triage)
-    app.router.add_post("/api/triage", handle_post_triage)
-    app.router.add_get("/api/export", handle_export)
-    app.router.add_get("/api/sample/{idx}", handle_sample)
+    # Per-dataset endpoints — all namespaced under /api/{slug}/
+    app.router.add_get("/api/{slug}/summary", handle_summary)
+    app.router.add_get("/api/{slug}/samples", handle_samples)
+    app.router.add_get("/api/{slug}/findings", handle_findings)
+    app.router.add_get("/api/{slug}/triage", handle_get_triage)
+    app.router.add_post("/api/{slug}/triage", handle_post_triage)
+    app.router.add_get("/api/{slug}/export", handle_export)
+    app.router.add_get("/api/{slug}/sample/{idx}", handle_sample)
 
     # Serve the SPA via WWWResource (mirrors inspect_ai pattern)
     if STATIC_DIR.exists():
@@ -193,17 +231,37 @@ def create_app(findings_dir: str | Path) -> web.Application:
     return app
 
 
+async def handle_datasets(request: web.Request) -> web.Response:
+    """List all loaded datasets with summary counts."""
+    datasets: dict[str, Any] = request.app["datasets"]
+    result = []
+    for slug, ds in datasets.items():
+        summary = ds["summary"]
+        result.append({
+            "slug": slug,
+            "dataset_name": summary.get("dataset_name", slug),
+            "split": summary.get("split"),
+            "total_samples": summary.get("total_samples", 0),
+            "total_findings": len(ds["findings"]),
+            "by_severity": summary.get("by_severity", {}),
+        })
+    return web.json_response(result)
+
+
 async def handle_summary(request: web.Request) -> web.Response:
-    return web.json_response(request.app["summary"])
+    ds = _get_dataset(request)
+    return web.json_response(ds["summary"])
 
 
 async def handle_samples(request: web.Request) -> web.Response:
-    return web.json_response(request.app["samples"])
+    ds = _get_dataset(request)
+    return web.json_response(ds["samples"])
 
 
 async def handle_findings(request: web.Request) -> web.Response:
-    findings = request.app["findings"]
-    triage = request.app["triage"]
+    ds = _get_dataset(request)
+    findings = ds["findings"]
+    triage = ds["triage"]
 
     # Enrich findings with triage status
     enriched = []
@@ -216,10 +274,12 @@ async def handle_findings(request: web.Request) -> web.Response:
 
 
 async def handle_get_triage(request: web.Request) -> web.Response:
-    return web.json_response(request.app["triage"])
+    ds = _get_dataset(request)
+    return web.json_response(ds["triage"])
 
 
 async def handle_post_triage(request: web.Request) -> web.Response:
+    ds = _get_dataset(request)
     body = await request.json()
     finding_id = str(body.get("finding_id", ""))
     status = body.get("status", "")
@@ -230,20 +290,21 @@ async def handle_post_triage(request: web.Request) -> web.Response:
             status=400,
         )
 
-    triage = request.app["triage"]
+    triage = ds["triage"]
     if status == "pending":
         triage.pop(finding_id, None)
     else:
         triage[finding_id] = status
 
-    _save_json(request.app["triage_file"], triage)
+    _save_json(ds["triage_file"], triage)
     return web.json_response({"ok": True})
 
 
 async def handle_export(request: web.Request) -> web.Response:
     """Export sample IDs that have no confirmed findings."""
-    findings = request.app["findings"]
-    triage = request.app["triage"]
+    ds = _get_dataset(request)
+    findings = ds["findings"]
+    triage = ds["triage"]
 
     # Collect sample indices with confirmed findings
     confirmed_indices: set[int] = set()
@@ -255,7 +316,7 @@ async def handle_export(request: web.Request) -> web.Response:
                 confirmed_indices.add(idx)
 
     # Get total samples from summary
-    total = request.app["summary"].get("total_samples", 0)
+    total = ds["summary"].get("total_samples", 0)
     clean_ids = sorted(set(range(total)) - confirmed_indices)
 
     text = "\n".join(str(i) for i in clean_ids) + "\n"
@@ -268,13 +329,14 @@ async def handle_export(request: web.Request) -> web.Response:
 
 async def handle_sample(request: web.Request) -> web.Response:
     """Return full sample data for one record, including images as data URLs."""
+    ds = _get_dataset(request)
     try:
         idx = int(request.match_info["idx"])
     except (ValueError, KeyError):
         return web.json_response({"error": "invalid index"}, status=400)
 
     # Base data from pre-serialised samples.json (always available)
-    samples: list[dict] = request.app["samples"]
+    samples: list[dict] = ds["samples"]
     basic = next((s for s in samples if s["index"] == idx), None)
     result: dict[str, Any] = {
         "index": idx,
@@ -286,7 +348,7 @@ async def handle_sample(request: web.Request) -> web.Response:
     }
 
     # Attempt to enrich with image bytes from the original dataset
-    records = await _load_records_cached(request.app)
+    records = await _load_records_cached(ds)
     if records is not None and 0 <= idx < len(records):
         record = records[idx]
 
@@ -314,8 +376,11 @@ async def handle_sample(request: web.Request) -> web.Response:
     return web.json_response(result)
 
 
-def run_server(findings_dir: str | Path, port: int = 7576) -> None:
+def run_server(
+    findings_dirs: list[str | Path] | str | Path,
+    port: int = 7576,
+) -> None:
     """Start the view server (blocking)."""
-    app = create_app(findings_dir)
+    app = create_app(findings_dirs)
     logger.info("Starting inspect-dataset viewer on http://localhost:%d", port)
     web.run_app(app, host="localhost", port=port, print=None)

@@ -298,8 +298,31 @@ def list_scanners() -> None:
     console.print(table)
 
 
+def _resolve_findings_dirs(paths: tuple[str, ...]) -> list[str]:
+    """Expand paths into a flat list of valid findings directories.
+
+    A path is a findings dir if it directly contains scan_summary.json.
+    Otherwise it is treated as a parent dir and its immediate children are
+    checked.  This supports all three invocation styles:
+
+        inspect-dataset view findings/vqa-rad/        # single dir
+        inspect-dataset view results/                 # parent dir
+        inspect-dataset view results/a/ results/b/   # explicit list
+    """
+    dirs: list[str] = []
+    for p in paths:
+        path = Path(p)
+        if (path / "scan_summary.json").exists():
+            dirs.append(str(path))
+        else:
+            for child in sorted(path.iterdir()):
+                if child.is_dir() and (child / "scan_summary.json").exists():
+                    dirs.append(str(child))
+    return dirs
+
+
 @cli.command(name="view")
-@click.argument("findings_dir", type=click.Path(exists=True))
+@click.argument("findings_dirs", nargs=-1, required=True, type=click.Path(exists=True))
 @click.option(
     "--port",
     default=7576,
@@ -312,10 +335,22 @@ def list_scanners() -> None:
     default=False,
     help="Don't automatically open the browser.",
 )
-def view(findings_dir: str, port: int, no_open: bool) -> None:
+def view(findings_dirs: tuple[str, ...], port: int, no_open: bool) -> None:
     """Launch the interactive dataset explorer.
 
-    FINDINGS_DIR is a directory produced by `inspect-dataset scan -o <dir>`.
+    FINDINGS_DIRS is one or more directories produced by
+    `inspect-dataset scan -o <dir>`, or a parent directory that contains
+    several such directories.
+
+    \b
+      # Single findings dir
+      inspect-dataset view findings/vqa-rad/
+
+      # Parent dir (all subdirs with scan_summary.json are loaded)
+      inspect-dataset view results/
+
+      # Explicit list
+      inspect-dataset view results/vqa-rad/ results/medqa/
     """
     import webbrowser
 
@@ -323,18 +358,27 @@ def view(findings_dir: str, port: int, no_open: bool) -> None:
 
     console = Console()
 
+    dirs = _resolve_findings_dirs(findings_dirs)
+    if not dirs:
+        raise click.ClickException(
+            "No findings directories found. "
+            "Each directory must contain a scan_summary.json file. "
+            "Run `inspect-dataset scan ... -o <dir>` first."
+        )
+
     try:
-        create_app(findings_dir)  # validate before starting
+        create_app(dirs)  # validate before starting
     except FileNotFoundError as e:
         raise click.ClickException(str(e))
 
     url = f"http://localhost:{port}"
-    console.print(f"Starting viewer at [bold]{url}[/bold] (findings: {findings_dir})")
+    label = dirs[0] if len(dirs) == 1 else f"{len(dirs)} datasets"
+    console.print(f"Starting viewer at [bold]{url}[/bold] ({label})")
 
     if not no_open:
         webbrowser.open(url)
 
-    run_server(findings_dir, port=port)
+    run_server(dirs, port=port)
 
 
 @cli.command()

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { AgGridReact } from "ag-grid-react";
 import { useStore } from "../store";
 import type { Finding, Sample } from "../types";
@@ -64,6 +64,7 @@ export function SamplesTab() {
   const summary = useStore((s) => s.summary);
   const setSelectedFinding = useStore((s) => s.setSelectedFinding);
   const navigate = useNavigate();
+  const { slug } = useParams<{ slug: string }>();
 
   const sampleMap = useMemo(() => {
     const m = new Map<number, Sample>();
@@ -147,7 +148,7 @@ export function SamplesTab() {
     const row = event.data;
     if (row && row.findings.length > 0) {
       setSelectedFinding(row.findings[0]);
-      navigate("/findings");
+      navigate(`/${slug}/findings`);
     }
   };
 

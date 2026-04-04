@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-04-04
+
+### Added
+
+- **Multi-dataset viewer**: `inspect-dataset view` now accepts multiple findings
+  directories, a parent directory (auto-expanded), or an explicit list.
+  A dataset picker home screen appears when more than one dataset is loaded;
+  single-dataset mode redirects straight to findings (no breaking change).
+- **`GET /api/datasets`** endpoint listing all loaded datasets with slug, name,
+  sample count, and severity breakdown.
+- All per-dataset API endpoints are now namespaced under `/api/{slug}/`
+  (summary, findings, samples, sample, triage, export).
+- **Dataset switcher** in the navbar header — a `<select>` dropdown appears
+  when multiple datasets are loaded, letting you switch without returning to
+  the home screen.
+- **Auto-generated output directory**: `inspect-dataset scan` now always
+  persists findings even when `--output-dir` is omitted, defaulting to
+  `findings/<dataset-slug>_<YYYY-MM-DDTHH-MM-SS>`.
+
 ## [0.3.3] - 2026-04-04
 
 ### Added

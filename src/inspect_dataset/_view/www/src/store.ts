@@ -1,9 +1,13 @@
 import { create } from "zustand";
-import type { Finding, Sample, Summary, TriageStatus } from "./types";
-import { fetchFindings, fetchSamples, fetchSummary, postTriage } from "./api";
+import type { DatasetInfo, Finding, Sample, Summary, TriageStatus } from "./types";
+import { fetchDatasets, fetchFindings, fetchSamples, fetchSummary, postTriage } from "./api";
 
 interface AppState {
-  // Data
+  // Dataset list (loaded once on startup)
+  datasets: DatasetInfo[];
+
+  // Currently viewed dataset
+  currentSlug: string | null;
   summary: Summary | null;
   findings: Finding[];
   samples: Sample[];
@@ -15,11 +19,14 @@ interface AppState {
 
   // Actions
   setSelectedFinding: (finding: Finding | null) => void;
-  loadData: () => Promise<void>;
+  loadDatasets: () => Promise<void>;
+  loadDataset: (slug: string) => Promise<void>;
   triageFinding: (findingId: number, status: TriageStatus) => Promise<void>;
 }
 
-export const useStore = create<AppState>((set) => ({
+export const useStore = create<AppState>((set, get) => ({
+  datasets: [],
+  currentSlug: null,
   summary: null,
   findings: [],
   samples: [],
@@ -30,13 +37,22 @@ export const useStore = create<AppState>((set) => ({
 
   setSelectedFinding: (finding) => set({ selectedFinding: finding }),
 
-  loadData: async () => {
-    set({ loading: true, error: null });
+  loadDatasets: async () => {
+    try {
+      const datasets = await fetchDatasets();
+      set({ datasets });
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
+
+  loadDataset: async (slug: string) => {
+    set({ loading: true, error: null, currentSlug: slug, selectedFinding: null });
     try {
       const [summary, findings, samples] = await Promise.all([
-        fetchSummary(),
-        fetchFindings(),
-        fetchSamples(),
+        fetchSummary(slug),
+        fetchFindings(slug),
+        fetchSamples(slug),
       ]);
       set({ summary, findings, samples, loading: false });
     } catch (e) {
@@ -45,7 +61,9 @@ export const useStore = create<AppState>((set) => ({
   },
 
   triageFinding: async (findingId, status) => {
-    await postTriage(findingId, status);
+    const slug = get().currentSlug;
+    if (!slug) return;
+    await postTriage(slug, findingId, status);
     set((state) => ({
       findings: state.findings.map((f) =>
         f.id === findingId ? { ...f, triage_status: status } : f,

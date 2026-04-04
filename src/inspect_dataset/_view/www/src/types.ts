@@ -1,3 +1,12 @@
+export interface DatasetInfo {
+  slug: string;
+  dataset_name: string;
+  split: string | null;
+  total_samples: number;
+  total_findings: number;
+  by_severity: Record<string, number>;
+}
+
 export interface ScannerStats {
   total: number;
   high: number;
