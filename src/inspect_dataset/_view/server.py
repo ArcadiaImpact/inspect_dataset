@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
+import base64
 import json
 import logging
+import mimetypes
 import os
 from pathlib import Path
 from typing import Any
@@ -54,6 +57,69 @@ def _save_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, indent=2) + "\n")
 
 
+def _detect_mime(data: bytes) -> str:
+    """Sniff MIME type from magic bytes. Falls back to image/jpeg."""
+    if data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if data[:4] == b"\x89PNG":
+        return "image/png"
+    if data[:3] == b"GIF":
+        return "image/gif"
+    if data[:4] == b"RIFF" and len(data) >= 12 and data[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/jpeg"
+
+
+def _to_data_url(data: bytes, path: str = "") -> str:
+    """Encode bytes as a base64 data URL, guessing MIME from path or magic bytes."""
+    mime: str | None = None
+    if path:
+        mime, _ = mimetypes.guess_type(path)
+    if not mime:
+        mime = _detect_mime(data)
+    encoded = base64.b64encode(data).decode()
+    return f"data:{mime};base64,{encoded}"
+
+
+async def _load_records_cached(app: web.Application) -> list[dict] | None:
+    """Lazy-load the original dataset records and cache them on the app.
+
+    Returns None (without raising) if the dataset cannot be loaded —
+    callers fall back to samples.json data without images.
+    """
+    if app.get("records_cache") is not None:
+        return app["records_cache"]  # type: ignore[return-value]
+
+    summary = app["summary"]
+    source_type: str = summary.get("source_type", "")
+    dataset_name: str = summary.get("dataset_name", "")
+    split: str = summary.get("split") or "train"
+    revision: str | None = summary.get("revision")
+
+    if not source_type or not dataset_name:
+        return None
+
+    try:
+        if source_type == "hf":
+            from inspect_dataset.loader import load_hf_dataset
+
+            records = await asyncio.to_thread(
+                load_hf_dataset, dataset_name, split=split, revision=revision
+            )
+        elif source_type == "inspect_task":
+            from inspect_dataset.loader import load_task_from_spec
+
+            records, _ = await asyncio.to_thread(load_task_from_spec, dataset_name)
+        else:
+            return None
+
+        app["records_cache"] = records
+        return records
+    except Exception as exc:
+        logger.warning("Could not load dataset for image serving: %s", exc)
+        return None
+
+
 def create_app(findings_dir: str | Path) -> web.Application:
     """Create the aiohttp application for serving the explorer UI."""
     findings_path = Path(findings_dir).resolve()
@@ -101,6 +167,7 @@ def create_app(findings_dir: str | Path) -> web.Application:
     app["samples"] = samples
     app["triage"] = triage
     app["triage_file"] = triage_file
+    app["records_cache"] = None
 
     app.router.add_get("/api/summary", handle_summary)
     app.router.add_get("/api/samples", handle_samples)
@@ -108,6 +175,7 @@ def create_app(findings_dir: str | Path) -> web.Application:
     app.router.add_get("/api/triage", handle_get_triage)
     app.router.add_post("/api/triage", handle_post_triage)
     app.router.add_get("/api/export", handle_export)
+    app.router.add_get("/api/sample/{idx}", handle_sample)
 
     # Serve the SPA via WWWResource (mirrors inspect_ai pattern)
     if STATIC_DIR.exists():
@@ -196,6 +264,54 @@ async def handle_export(request: web.Request) -> web.Response:
         content_type="text/plain",
         headers={"Content-Disposition": "attachment; filename=clean_ids.txt"},
     )
+
+
+async def handle_sample(request: web.Request) -> web.Response:
+    """Return full sample data for one record, including images as data URLs."""
+    try:
+        idx = int(request.match_info["idx"])
+    except (ValueError, KeyError):
+        return web.json_response({"error": "invalid index"}, status=400)
+
+    # Base data from pre-serialised samples.json (always available)
+    samples: list[dict] = request.app["samples"]
+    basic = next((s for s in samples if s["index"] == idx), None)
+    result: dict[str, Any] = {
+        "index": idx,
+        "question": basic["question"] if basic else "",
+        "answer": basic["answer"] if basic else "",
+        "id": basic.get("id") if basic else None,
+        "images": [],
+        "files": [],
+    }
+
+    # Attempt to enrich with image bytes from the original dataset
+    records = await _load_records_cached(request.app)
+    if records is not None and 0 <= idx < len(records):
+        record = records[idx]
+
+        # HF image fields arrive as {"bytes": b"...", "path": "..."}
+        for key, val in record.items():
+            if key.startswith("__"):
+                continue
+            if isinstance(val, dict) and isinstance(val.get("bytes"), bytes) and val["bytes"]:
+                result["images"].append({
+                    "field": key,
+                    "data_url": _to_data_url(val["bytes"], val.get("path") or ""),
+                })
+
+        # inspect_ai Sample.files stored under __files__
+        files_map: dict = record.get("__files__") or {}
+        for name, data in files_map.items():
+            if isinstance(data, bytes):
+                result["files"].append({
+                    "name": name,
+                    "data_url": _to_data_url(data, name),
+                })
+            elif isinstance(data, str):
+                result["files"].append({"name": name, "data_url": data})
+
+    return web.json_response(result)
 
 
 def run_server(findings_dir: str | Path, port: int = 7576) -> None:

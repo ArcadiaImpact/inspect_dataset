@@ -298,3 +298,49 @@ def test_severity_filter(page, server_url: str) -> None:
     items = page.query_selector_all("[data-finding-id]")
     # We have 2 high-severity findings (duplicate_questions)
     assert len(items) == 2
+
+# ---------------------------------------------------------------------------
+# API unit tests (no Playwright)
+# ---------------------------------------------------------------------------
+
+
+def test_api_sample_basic(server_url: str) -> None:
+    """GET /api/sample/{idx} returns basic sample fields from samples.json."""
+    import json
+    import urllib.request
+
+    res = urllib.request.urlopen(f"{server_url}/api/sample/0")
+    data = json.loads(res.read())
+
+    assert data["index"] == 0
+    assert data["question"] == "Q0?"
+    assert data["answer"] == "A0"
+    assert data["id"] == "q0"
+    assert data["images"] == []
+    assert data["files"] == []
+
+
+def test_api_sample_out_of_range(server_url: str) -> None:
+    """GET /api/sample/{idx} for an unknown index returns empty strings."""
+    import json
+    import urllib.request
+
+    res = urllib.request.urlopen(f"{server_url}/api/sample/999")
+    data = json.loads(res.read())
+
+    assert data["index"] == 999
+    assert data["question"] == ""
+    assert data["answer"] == ""
+    assert data["images"] == []
+
+
+def test_api_sample_invalid_idx(server_url: str) -> None:
+    """GET /api/sample/abc returns 400."""
+    import urllib.error
+    import urllib.request
+
+    try:
+        urllib.request.urlopen(f"{server_url}/api/sample/abc")
+        assert False, "Expected HTTPError"
+    except urllib.error.HTTPError as e:
+        assert e.code == 400
