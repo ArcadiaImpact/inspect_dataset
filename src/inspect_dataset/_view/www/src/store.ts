@@ -2,8 +2,6 @@ import { create } from "zustand";
 import type { Finding, Sample, Summary, TriageStatus } from "./types";
 import { fetchFindings, fetchSamples, fetchSummary, postTriage } from "./api";
 
-type Tab = "findings" | "samples";
-
 interface AppState {
   // Data
   summary: Summary | null;
@@ -13,40 +11,23 @@ interface AppState {
   error: string | null;
 
   // UI state
-  activeTab: Tab;
-  selectedScanner: string | null;
-  selectedSeverity: string | null;
-  selectedTriageFilter: string | null;
   selectedFinding: Finding | null;
 
   // Actions
-  setActiveTab: (tab: Tab) => void;
-  setSelectedScanner: (scanner: string | null) => void;
-  setSelectedSeverity: (severity: string | null) => void;
-  setSelectedTriageFilter: (filter: string | null) => void;
   setSelectedFinding: (finding: Finding | null) => void;
   loadData: () => Promise<void>;
   triageFinding: (findingId: number, status: TriageStatus) => Promise<void>;
-  navigateFinding: (direction: "next" | "prev") => void;
 }
 
-export const useStore = create<AppState>((set, get) => ({
+export const useStore = create<AppState>((set) => ({
   summary: null,
   findings: [],
   samples: [],
   loading: false,
   error: null,
 
-  activeTab: "findings",
-  selectedScanner: null,
-  selectedSeverity: null,
-  selectedTriageFilter: null,
   selectedFinding: null,
 
-  setActiveTab: (tab) => set({ activeTab: tab }),
-  setSelectedScanner: (scanner) => set({ selectedScanner: scanner }),
-  setSelectedSeverity: (severity) => set({ selectedSeverity: severity }),
-  setSelectedTriageFilter: (filter) => set({ selectedTriageFilter: filter }),
   setSelectedFinding: (finding) => set({ selectedFinding: finding }),
 
   loadData: async () => {
@@ -75,39 +56,23 @@ export const useStore = create<AppState>((set, get) => ({
           : state.selectedFinding,
     }));
   },
-
-  navigateFinding: (direction) => {
-    const { selectedFinding } = get();
-    const filtered = getFilteredFindings(get());
-    if (!selectedFinding || filtered.length === 0) return;
-
-    const idx = filtered.findIndex((f) => f.id === selectedFinding.id);
-    const next =
-      direction === "next"
-        ? Math.min(idx + 1, filtered.length - 1)
-        : Math.max(idx - 1, 0);
-    set({ selectedFinding: filtered[next] });
-  },
 }));
 
-/** Derived: apply scanner/severity/triage filters to findings. */
-export function getFilteredFindings(state: AppState): Finding[] {
-  let result = state.findings;
-  if (state.selectedScanner) {
-    result = result.filter((f) => f.scanner === state.selectedScanner);
-  }
-  if (state.selectedSeverity) {
-    result = result.filter((f) => f.severity === state.selectedSeverity);
-  }
-  if (state.selectedTriageFilter) {
-    result = result.filter(
-      (f) => f.triage_status === state.selectedTriageFilter,
-    );
-  }
+/** Apply scanner/severity/triage filters to a findings list. */
+export function getFilteredFindings(
+  findings: Finding[],
+  scanner: string | null,
+  severity: string | null,
+  triage: string | null,
+): Finding[] {
+  let result = findings;
+  if (scanner) result = result.filter((f) => f.scanner === scanner);
+  if (severity) result = result.filter((f) => f.severity === severity);
+  if (triage) result = result.filter((f) => f.triage_status === triage);
   return result;
 }
 
-/** Derived: scanner name → count (from full findings list). */
+/** Scanner name → finding count (from full findings list). */
 export function getScannerCounts(
   findings: Finding[],
 ): Record<string, number> {

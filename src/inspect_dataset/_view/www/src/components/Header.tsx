@@ -1,9 +1,8 @@
+import { NavLink } from "react-router-dom";
 import { useStore } from "../store";
 
 export function Header() {
   const summary = useStore((s) => s.summary);
-  const activeTab = useStore((s) => s.activeTab);
-  const setActiveTab = useStore((s) => s.setActiveTab);
   const findings = useStore((s) => s.findings);
 
   const confirmed = findings.filter(
@@ -32,23 +31,25 @@ export function Header() {
 
       <ul className="nav nav-pills me-3">
         <li className="nav-item">
-          <button
-            className={`nav-link ${activeTab === "findings" ? "active" : ""}`}
-            onClick={() => setActiveTab("findings")}
+          <NavLink
+            to="/findings"
+            className={({ isActive }) =>
+              `nav-link${isActive ? " active" : ""}`
+            }
           >
             Findings
-            <span className="badge bg-secondary ms-1">
-              {findings.length}
-            </span>
-          </button>
+            <span className="badge bg-secondary ms-1">{findings.length}</span>
+          </NavLink>
         </li>
         <li className="nav-item">
-          <button
-            className={`nav-link ${activeTab === "samples" ? "active" : ""}`}
-            onClick={() => setActiveTab("samples")}
+          <NavLink
+            to="/samples"
+            className={({ isActive }) =>
+              `nav-link${isActive ? " active" : ""}`
+            }
           >
             Samples
-          </button>
+          </NavLink>
         </li>
       </ul>
 

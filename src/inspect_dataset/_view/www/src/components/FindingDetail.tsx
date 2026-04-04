@@ -1,10 +1,13 @@
-import { useStore } from "../store";
+import { useSearchParams } from "react-router-dom";
+import { useStore, getFilteredFindings } from "../store";
 import type { TriageStatus } from "../types";
 
 export function FindingDetail() {
   const finding = useStore((s) => s.selectedFinding);
   const triageFinding = useStore((s) => s.triageFinding);
-  const navigateFinding = useStore((s) => s.navigateFinding);
+  const findings = useStore((s) => s.findings);
+  const setSelectedFinding = useStore((s) => s.setSelectedFinding);
+  const [searchParams] = useSearchParams();
 
   if (!finding) {
     return (
@@ -22,6 +25,22 @@ export function FindingDetail() {
       finding.id,
       finding.triage_status === status ? "pending" : status,
     );
+  };
+
+  const filtered = getFilteredFindings(
+    findings,
+    searchParams.get("scanner"),
+    searchParams.get("severity"),
+    searchParams.get("triage"),
+  );
+  const idx = filtered.findIndex((f) => f.id === finding.id);
+
+  const navigateFinding = (direction: "prev" | "next") => {
+    const next =
+      direction === "next"
+        ? Math.min(idx + 1, filtered.length - 1)
+        : Math.max(idx - 1, 0);
+    if (next !== idx) setSelectedFinding(filtered[next]);
   };
 
   return (
@@ -100,6 +119,7 @@ export function FindingDetail() {
           className="btn btn-sm btn-outline-secondary"
           onClick={() => navigateFinding("prev")}
           title="Previous finding (p)"
+          disabled={idx <= 0}
         >
           <i className="bi bi-chevron-left me-1" />
           Prev
@@ -108,6 +128,7 @@ export function FindingDetail() {
           className="btn btn-sm btn-outline-secondary"
           onClick={() => navigateFinding("next")}
           title="Next finding (n)"
+          disabled={idx >= filtered.length - 1}
         >
           Next
           <i className="bi bi-chevron-right ms-1" />
@@ -123,5 +144,9 @@ function SeverityBadge({ severity }: { severity: string }) {
     medium: "bg-warning text-dark",
     low: "bg-secondary",
   };
-  return <span className={`badge ${cls[severity] ?? "bg-secondary"}`}>{severity.toUpperCase()}</span>;
+  return (
+    <span className={`badge ${cls[severity] ?? "bg-secondary"}`}>
+      {severity.toUpperCase()}
+    </span>
+  );
 }

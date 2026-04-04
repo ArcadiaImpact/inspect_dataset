@@ -1,3 +1,4 @@
+import { useSearchParams } from "react-router-dom";
 import clsx from "clsx";
 import { useStore, getScannerCounts } from "../store";
 
@@ -9,12 +10,20 @@ const SEVERITY_COLORS: Record<string, string> = {
 
 export function ScannerSidebar() {
   const findings = useStore((s) => s.findings);
-  const selectedScanner = useStore((s) => s.selectedScanner);
-  const setSelectedScanner = useStore((s) => s.setSelectedScanner);
-  const selectedSeverity = useStore((s) => s.selectedSeverity);
-  const setSelectedSeverity = useStore((s) => s.setSelectedSeverity);
-  const selectedTriageFilter = useStore((s) => s.selectedTriageFilter);
-  const setSelectedTriageFilter = useStore((s) => s.setSelectedTriageFilter);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const selectedScanner = searchParams.get("scanner");
+  const selectedSeverity = searchParams.get("severity");
+  const selectedTriageFilter = searchParams.get("triage");
+
+  function setParam(key: string, value: string | null) {
+    setSearchParams((prev) => {
+      const p = new URLSearchParams(prev);
+      if (value) p.set(key, value);
+      else p.delete(key);
+      return p;
+    });
+  }
 
   const counts = getScannerCounts(findings);
   const scanners = Object.entries(counts).sort(([, a], [, b]) => b - a);
@@ -36,7 +45,7 @@ export function ScannerSidebar() {
             "list-group-item list-group-item-action d-flex justify-content-between align-items-center",
             !selectedScanner && "active",
           )}
-          onClick={() => setSelectedScanner(null)}
+          onClick={() => setParam("scanner", null)}
         >
           All
           <span className="badge bg-secondary rounded-pill">
@@ -51,7 +60,7 @@ export function ScannerSidebar() {
               selectedScanner === name && "active",
             )}
             onClick={() =>
-              setSelectedScanner(selectedScanner === name ? null : name)
+              setParam("scanner", selectedScanner === name ? null : name)
             }
           >
             <span className="text-truncate">{name}</span>
@@ -71,7 +80,7 @@ export function ScannerSidebar() {
         <select
           className="form-select form-select-sm"
           value={selectedSeverity ?? ""}
-          onChange={(e) => setSelectedSeverity(e.target.value || null)}
+          onChange={(e) => setParam("severity", e.target.value || null)}
         >
           <option value="">Any</option>
           {Object.keys(SEVERITY_COLORS).map((s) => (
@@ -87,7 +96,7 @@ export function ScannerSidebar() {
         <select
           className="form-select form-select-sm"
           value={selectedTriageFilter ?? ""}
-          onChange={(e) => setSelectedTriageFilter(e.target.value || null)}
+          onChange={(e) => setParam("triage", e.target.value || null)}
         >
           <option value="">Any</option>
           <option value="pending">Pending</option>

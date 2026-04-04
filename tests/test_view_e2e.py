@@ -270,7 +270,7 @@ def test_samples_tab(page, server_url: str) -> None:
     page.wait_for_selector(".navbar-brand")
 
     # Click the Samples nav pill (be specific to avoid matching footer text)
-    page.click(".nav-pills button:has-text('Samples')")
+    page.click(".nav-pills a:has-text('Samples')")
     page.wait_for_timeout(1500)
 
     # AG Grid should render

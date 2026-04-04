@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { useStore } from "./store";
 import { useKeyboard } from "./hooks/useKeyboard";
 import { Header } from "./components/Header";
@@ -8,11 +9,20 @@ import { FindingDetail } from "./components/FindingDetail";
 import { SamplesTab } from "./components/SamplesTab";
 import { exportUrl } from "./api";
 
+function FindingsPage() {
+  return (
+    <>
+      <ScannerSidebar />
+      <FindingsList />
+      <FindingDetail />
+    </>
+  );
+}
+
 function App() {
   const loadData = useStore((s) => s.loadData);
   const loading = useStore((s) => s.loading);
   const error = useStore((s) => s.error);
-  const activeTab = useStore((s) => s.activeTab);
 
   useKeyboard();
 
@@ -43,15 +53,11 @@ function App() {
       <Header />
 
       <div className="d-flex flex-grow-1" style={{ minHeight: 0 }}>
-        {activeTab === "findings" ? (
-          <>
-            <ScannerSidebar />
-            <FindingsList />
-            <FindingDetail />
-          </>
-        ) : (
-          <SamplesTab />
-        )}
+        <Routes>
+          <Route path="/" element={<Navigate to="/findings" replace />} />
+          <Route path="/findings" element={<FindingsPage />} />
+          <Route path="/samples" element={<SamplesTab />} />
+        </Routes>
       </div>
 
       <footer className="border-top bg-body-tertiary px-3 py-1 d-flex justify-content-between align-items-center small text-body-secondary">

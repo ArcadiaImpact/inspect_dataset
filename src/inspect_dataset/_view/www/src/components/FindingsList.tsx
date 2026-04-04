@@ -1,3 +1,4 @@
+import { useSearchParams } from "react-router-dom";
 import clsx from "clsx";
 import { useStore, getFilteredFindings } from "../store";
 import type { Finding } from "../types";
@@ -15,10 +16,17 @@ const TRIAGE_ICON: Record<string, string> = {
 };
 
 export function FindingsList() {
-  const state = useStore();
-  const filtered = getFilteredFindings(state);
+  const findings = useStore((s) => s.findings);
   const selectedFinding = useStore((s) => s.selectedFinding);
   const setSelectedFinding = useStore((s) => s.setSelectedFinding);
+  const [searchParams] = useSearchParams();
+
+  const filtered = getFilteredFindings(
+    findings,
+    searchParams.get("scanner"),
+    searchParams.get("severity"),
+    searchParams.get("triage"),
+  );
 
   if (filtered.length === 0) {
     return (
