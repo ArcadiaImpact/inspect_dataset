@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { useStore } from "../store";
-import type { Finding } from "../types";
+import type { Finding, Sample } from "../types";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
 
@@ -9,6 +9,9 @@ ModuleRegistry.registerModules([AllCommunityModule]);
 
 interface SampleRow {
   index: number;
+  id: string | number | null;
+  question: string;
+  answer: string;
   findings: Finding[];
 }
 
@@ -38,11 +41,34 @@ function FindingsBadges({ findings }: { findings: Finding[] }) {
   );
 }
 
+function TextCell({ value }: { value: string }) {
+  return (
+    <span
+      title={value}
+      style={{
+        display: "block",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {value}
+    </span>
+  );
+}
+
 export function SamplesTab() {
   const findings = useStore((s) => s.findings);
+  const samples = useStore((s) => s.samples);
   const summary = useStore((s) => s.summary);
   const setSelectedFinding = useStore((s) => s.setSelectedFinding);
   const setActiveTab = useStore((s) => s.setActiveTab);
+
+  const sampleMap = useMemo(() => {
+    const m = new Map<number, Sample>();
+    for (const s of samples) m.set(s.index, s);
+    return m;
+  }, [samples]);
 
   const rows: SampleRow[] = useMemo(() => {
     const totalSamples = summary?.total_samples ?? 0;
@@ -54,23 +80,51 @@ export function SamplesTab() {
     }
     const result: SampleRow[] = [];
     for (let i = 0; i < totalSamples; i++) {
-      result.push({ index: i, findings: byIndex.get(i) ?? [] });
+      const sample = sampleMap.get(i);
+      result.push({
+        index: i,
+        id: sample?.id ?? null,
+        question: sample?.question ?? "",
+        answer: sample?.answer ?? "",
+        findings: byIndex.get(i) ?? [],
+      });
     }
     return result;
-  }, [findings, summary]);
+  }, [findings, summary, sampleMap]);
+
+  const hasSamples = samples.length > 0;
 
   const columnDefs: ColDef<SampleRow>[] = useMemo(
     () => [
       {
-        headerName: "Index",
+        headerName: "#",
         field: "index",
-        width: 90,
+        width: 70,
         sort: "asc" as const,
       },
+      ...(hasSamples
+        ? [
+            {
+              headerName: "Question",
+              field: "question" as const,
+              flex: 2,
+              cellRenderer: (params: ICellRendererParams<SampleRow>) =>
+                params.value != null ? <TextCell value={String(params.value)} /> : null,
+            },
+            {
+              headerName: "Answer",
+              field: "answer" as const,
+              flex: 1,
+              cellRenderer: (params: ICellRendererParams<SampleRow>) =>
+                params.value != null ? <TextCell value={String(params.value)} /> : null,
+            },
+          ]
+        : []),
       {
         headerName: "Findings",
         field: "findings",
-        flex: 1,
+        flex: hasSamples ? 0 : 1,
+        width: hasSamples ? 220 : undefined,
         cellRenderer: (params: ICellRendererParams<SampleRow>) => {
           const row = params.data;
           if (!row) return null;
@@ -79,13 +133,13 @@ export function SamplesTab() {
         comparator: (a: Finding[], b: Finding[]) => a.length - b.length,
       },
       {
-        headerName: "Count",
-        width: 90,
+        headerName: "N",
+        width: 60,
         valueGetter: (params: { data?: SampleRow }) =>
           params.data?.findings.length ?? 0,
       },
     ],
-    [],
+    [hasSamples],
   );
 
   const onRowClicked = (event: { data?: SampleRow }) => {

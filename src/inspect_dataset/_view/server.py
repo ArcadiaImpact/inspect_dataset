@@ -72,7 +72,7 @@ def create_app(findings_dir: str | Path) -> web.Application:
     triage_file = findings_path / "triage.json"
 
     # Load all scanner findings files (one per scanner, e.g. answer_length.json)
-    skip = {"scan_summary.json", "triage.json"}
+    skip = {"scan_summary.json", "triage.json", "samples.json"}
     all_findings: list[dict[str, Any]] = []
     for f in sorted(findings_path.glob("*.json")):
         if f.name in skip:
@@ -89,13 +89,21 @@ def create_app(findings_dir: str | Path) -> web.Application:
         triage = _load_json(triage_file)
 
     app = web.Application()
+    # Load samples data if available
+    samples_file = findings_path / "samples.json"
+    samples: list[dict[str, Any]] = []
+    if samples_file.exists():
+        samples = _load_json(samples_file)
+
     app["findings_path"] = findings_path
     app["summary"] = summary
     app["findings"] = all_findings
+    app["samples"] = samples
     app["triage"] = triage
     app["triage_file"] = triage_file
 
     app.router.add_get("/api/summary", handle_summary)
+    app.router.add_get("/api/samples", handle_samples)
     app.router.add_get("/api/findings", handle_findings)
     app.router.add_get("/api/triage", handle_get_triage)
     app.router.add_post("/api/triage", handle_post_triage)
@@ -119,6 +127,10 @@ def create_app(findings_dir: str | Path) -> web.Application:
 
 async def handle_summary(request: web.Request) -> web.Response:
     return web.json_response(request.app["summary"])
+
+
+async def handle_samples(request: web.Request) -> web.Response:
+    return web.json_response(request.app["samples"])
 
 
 async def handle_findings(request: web.Request) -> web.Response:

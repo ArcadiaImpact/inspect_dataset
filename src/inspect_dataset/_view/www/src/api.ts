@@ -1,4 +1,4 @@
-import type { Finding, Summary, TriageStatus } from "./types";
+import type { Finding, Sample, Summary, TriageStatus } from "./types";
 
 const BASE = "/api";
 
@@ -21,6 +21,12 @@ export async function postTriage(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ finding_id: findingId, status }),
   });
+}
+
+export async function fetchSamples(): Promise<Sample[]> {
+  const res = await fetch(`${BASE}/samples`);
+  if (!res.ok) return [];
+  return res.json();
 }
 
 export function exportUrl(): string {

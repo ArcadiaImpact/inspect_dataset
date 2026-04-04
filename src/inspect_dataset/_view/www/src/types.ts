@@ -14,6 +14,13 @@ export interface Summary {
   by_severity: Record<string, number>;
 }
 
+export interface Sample {
+  index: number;
+  question: string;
+  answer: string;
+  id?: string | number;
+}
+
 export type TriageStatus = "pending" | "confirmed" | "dismissed";
 
 export interface Finding {

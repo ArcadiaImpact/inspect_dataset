@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
+from rich import box
 from rich.console import Console
 from rich.table import Table
-from rich import box
 
-from inspect_dataset._types import Finding, ScanRun
+from inspect_dataset._types import FieldMap, Record, ScanRun
 
 _SEVERITY_COLOUR = {"high": "red", "medium": "yellow", "low": "cyan"}
 _SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
@@ -19,7 +20,7 @@ def print_report(run: ScanRun, console: Console | None = None) -> None:
         console = Console()
 
     console.print()
-    console.rule(f"[bold]inspect-dataset scan report[/bold]")
+    console.rule("[bold]inspect-dataset scan report[/bold]")
     console.print(
         f"  Dataset: [bold]{run.dataset_name}[/bold]"
         + (f"  split={run.split}" if run.split else "")
@@ -60,18 +61,33 @@ def print_report(run: ScanRun, console: Console | None = None) -> None:
     # Detail: top findings per scanner (up to 5 each)
     for scanner_name, findings in sorted(by_scanner.items()):
         findings_sorted = sorted(findings, key=lambda f: _SEVERITY_ORDER[f.severity])
-        console.rule(f"[bold]{scanner_name}[/bold] ({len(findings)} finding{'s' if len(findings) != 1 else ''})")
+        console.rule(
+            f"[bold]{scanner_name}[/bold] ({len(findings)} finding{'s' if len(findings) != 1 else ''})"
+        )
         for f in findings_sorted[:5]:
             colour = _SEVERITY_COLOUR[f.severity]
-            id_str = f"id={f.sample_id}" if f.sample_id is not None else f"index={f.sample_index}"
-            console.print(f"  [{colour}][{f.severity.upper()}][/{colour}] [{id_str}] {f.explanation}")
+            id_str = (
+                f"id={f.sample_id}"
+                if f.sample_id is not None
+                else f"index={f.sample_index}"
+            )
+            console.print(
+                f"  [{colour}][{f.severity.upper()}][/{colour}] [{id_str}] {f.explanation}"
+            )
         if len(findings) > 5:
-            console.print(f"  [dim]... and {len(findings) - 5} more (see output files)[/dim]")
+            console.print(
+                f"  [dim]... and {len(findings) - 5} more (see output files)[/dim]"
+            )
         console.print()
 
 
-def save_findings(run: ScanRun, output_dir: Path) -> None:
-    """Write per-scanner JSON files and a summary to output_dir."""
+def save_findings(
+    run: ScanRun,
+    output_dir: Path,
+    records: list[Record] | None = None,
+    fields: FieldMap | None = None,
+) -> None:
+    """Write per-scanner JSON files, a summary, and optionally samples to output_dir."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
     by_scanner = run.by_scanner()
@@ -96,13 +112,26 @@ def save_findings(run: ScanRun, output_dir: Path) -> None:
             for name, findings in by_scanner.items()
         },
         "by_severity": {
-            sev: len(findings)
-            for sev, findings in run.by_severity().items()
+            sev: len(findings) for sev, findings in run.by_severity().items()
         },
     }
-    (output_dir / "scan_summary.json").write_text(
-        json.dumps(summary, indent=2)
-    )
+    (output_dir / "scan_summary.json").write_text(json.dumps(summary, indent=2))
+
+    # Write samples.json if records and fields are provided
+    if records is not None and fields is not None:
+        samples = []
+        for i, rec in enumerate(records):
+            sample: dict[str, Any] = {
+                "index": i,
+                "question": str(rec.get(fields.question, "")),
+                "answer": str(rec.get(fields.answer, "")),
+            }
+            if fields.id and fields.id in rec:
+                sample["id"] = rec[fields.id]
+            samples.append(sample)
+        (output_dir / "samples.json").write_text(
+            json.dumps(samples, indent=2, default=str)
+        )
 
     _write_markdown_report(run, output_dir / "REPORT.md")
 
@@ -111,7 +140,8 @@ def _write_markdown_report(run: ScanRun, path: Path) -> None:
     lines = [
         "# inspect-dataset Report",
         "",
-        f"**Dataset:** {run.dataset_name}" + (f" (split: `{run.split}`)" if run.split else ""),
+        f"**Dataset:** {run.dataset_name}"
+        + (f" (split: `{run.split}`)" if run.split else ""),
         f"**Samples scanned:** {run.total_samples:,}",
         f"**Total findings:** {len(run.findings):,}",
         "",
@@ -134,7 +164,11 @@ def _write_markdown_report(run: ScanRun, path: Path) -> None:
         lines.append(f"### {scanner_name}")
         lines.append("")
         for f in sorted(findings, key=lambda f: _SEVERITY_ORDER[f.severity]):
-            id_str = f"id={f.sample_id}" if f.sample_id is not None else f"index={f.sample_index}"
+            id_str = (
+                f"id={f.sample_id}"
+                if f.sample_id is not None
+                else f"index={f.sample_index}"
+            )
             lines.append(f"- **[{f.severity.upper()}]** [{id_str}] {f.explanation}")
         lines.append("")
 

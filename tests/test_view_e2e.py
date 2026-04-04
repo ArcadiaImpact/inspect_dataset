@@ -96,6 +96,12 @@ def _create_fixture() -> None:
     }
     (FINDINGS_DIR / "scan_summary.json").write_text(json.dumps(summary, indent=2))
 
+    samples = [
+        {"index": i, "question": f"Q{i}?", "answer": f"A{i}", "id": f"q{i}"}
+        for i in range(10)
+    ]
+    (FINDINGS_DIR / "samples.json").write_text(json.dumps(samples, indent=2))
+
     # Remove any stale triage file
     triage_file = FINDINGS_DIR / "triage.json"
     if triage_file.exists():

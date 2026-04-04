@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import type { Finding, Summary, TriageStatus } from "./types";
-import { fetchFindings, fetchSummary, postTriage } from "./api";
+import type { Finding, Sample, Summary, TriageStatus } from "./types";
+import { fetchFindings, fetchSamples, fetchSummary, postTriage } from "./api";
 
 type Tab = "findings" | "samples";
 
@@ -8,6 +8,7 @@ interface AppState {
   // Data
   summary: Summary | null;
   findings: Finding[];
+  samples: Sample[];
   loading: boolean;
   error: string | null;
 
@@ -32,6 +33,7 @@ interface AppState {
 export const useStore = create<AppState>((set, get) => ({
   summary: null,
   findings: [],
+  samples: [],
   loading: false,
   error: null,
 
@@ -50,11 +52,12 @@ export const useStore = create<AppState>((set, get) => ({
   loadData: async () => {
     set({ loading: true, error: null });
     try {
-      const [summary, findings] = await Promise.all([
+      const [summary, findings, samples] = await Promise.all([
         fetchSummary(),
         fetchFindings(),
+        fetchSamples(),
       ]);
-      set({ summary, findings, loading: false });
+      set({ summary, findings, samples, loading: false });
     } catch (e) {
       set({ error: String(e), loading: false });
     }

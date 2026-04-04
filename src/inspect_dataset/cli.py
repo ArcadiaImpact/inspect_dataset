@@ -219,7 +219,7 @@ def scan(
 
     if output_dir:
         out = Path(output_dir)
-        save_findings(run, out)
+        save_findings(run, out, records=records, fields=fields)
         console.print(f"Findings saved to [bold]{out}[/bold]")
 
 
