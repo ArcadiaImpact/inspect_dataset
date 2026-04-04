@@ -5,7 +5,7 @@ A dataset quality scanner for AI evaluation datasets. Companion to
 agent trajectories — inspect-dataset scans the underlying datasets themselves.
 
 **Organisation:** Arcadia  
-**Status:** v0.3.1 complete
+**Status:** v0.3.2 complete
 
 ---
 
@@ -338,7 +338,7 @@ re-opening the HF dataset with the same parameters recorded in
   `JsonPanel` components can be imported for the raw-record display rather than
   re-implementing them
 
-### v0.3.2 — Meaningful URLs (planned)
+### v0.3.2 — Meaningful URLs ✓
 
 The SPA currently ignores URL entirely — tab switches don't update the address
 bar and there is no way to share or deep-link to a particular view. Fix this so

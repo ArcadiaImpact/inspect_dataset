@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-04-04
+
+### Added
+
+- **Meaningful URLs** — the address bar now reflects UI state at all times:
+  - `/findings` for the Findings tab; `/samples` for the Samples tab
+  - `/` redirects to `/findings`
+  - Active filters encoded as search params:
+    `?scanner=answerability&severity=high&triage=pending`
+  - Back/forward navigation restores the full filter state
+- `react-router-dom` v7 added; tabs use `NavLink`, filters use
+  `useSearchParams`, row navigation uses `useNavigate`
+- Prev/Next buttons in the detail panel now disable at the list boundaries
+
+### Changed
+
+- Tab buttons replaced with `<a>` links (NavLink); test selector updated
+  from `.nav-pills button` to `.nav-pills a`
+- Filter state removed from Zustand store — owned entirely by the URL
+
 ## [0.3.1] - 2026-04-04
 
 ### Added
