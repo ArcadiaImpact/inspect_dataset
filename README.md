@@ -50,6 +50,73 @@ inspect-dataset scan flaviagiammarino/vqa-rad \
 
 # View a saved report
 inspect-dataset report findings/
+
+## Interactive viewer
+
+`inspect-dataset view` serves a local React app for browsing findings and
+triaging issues.
+
+Unlike `inspect_ai` and `inspect-scout`, this repository does not currently
+commit built frontend assets, so the viewer needs a one-time local frontend
+build before it will work.
+
+### First-time setup
+
+1. Install development dependencies:
+
+```bash
+uv sync --extra dev
+```
+
+1. Install the viewer frontend dependencies:
+
+```bash
+cd src/inspect_dataset/_view/www
+npm install
+```
+
+1. Build the frontend bundle:
+
+```bash
+npm run build
+```
+
+1. Return to the repository root and generate a findings directory if you do
+not already have one:
+
+```bash
+uv run inspect-dataset scan flaviagiammarino/vqa-rad --split test -o findings/
+```
+
+1. Launch the viewer:
+
+```bash
+uv run inspect-dataset view findings/
+```
+
+1. Open the URL printed by the command, usually:
+
+```text
+http://localhost:7576/
+```
+
+### After the first build
+
+If you are only using the viewer, you normally only need to rebuild after
+changing files in `src/inspect_dataset/_view/www/`:
+
+```bash
+cd src/inspect_dataset/_view/www
+npm run build
+```
+
+The viewer accepts either a single findings directory, a parent directory
+containing multiple findings directories, or an explicit list of directories:
+
+```bash
+uv run inspect-dataset view findings/
+uv run inspect-dataset view results/
+uv run inspect-dataset view results/vqa-rad/ results/medqa/
 ```
 
 ## Scanners
@@ -90,11 +157,24 @@ Each finding includes the scanner name, severity, category, explanation, sample 
 
 ## Integration with inspect-scout
 
-inspect-scout tracks which samples models consistently fail or succeed on. inspect-dataset provides a complementary static pass before running evals. A future release will accept inspect-scout results directly to produce eval-informed findings and a `clean_ids.txt` export for quality-adjusted benchmark scores.
+inspect-scout tracks which samples models consistently fail or succeed on.
+inspect-dataset provides a complementary static pass before running evals.
+A future release will accept inspect-scout results directly to produce
+eval-informed findings and a `clean_ids.txt` export for quality-adjusted
+benchmark scores.
 
 ## Development
 
 ```bash
 uv sync --extra dev
 uv run pytest
+```
+
+If you are working on the interactive viewer itself, also install frontend
+dependencies and build the bundle:
+
+```bash
+cd src/inspect_dataset/_view/www
+npm install
+npm run build
 ```
