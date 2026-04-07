@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 // Matches inspect_ai conventions: stable filenames, base "", dev proxy to backend
 export default defineConfig({
   plugins: [react()],
-  base: '',
+  base: '/',
   build: {
     minify: false,
     sourcemap: true,

@@ -35,6 +35,10 @@ class _WWWResource(web.StaticResource):
         filename = request.match_info["filename"]
         if not filename:
             request.match_info["filename"] = "index.html"
+        else:
+            candidate = STATIC_DIR / filename
+            if not candidate.exists() and "." not in Path(filename).name:
+                request.match_info["filename"] = "index.html"
 
         response = await super()._handle(request)
 
@@ -237,14 +241,16 @@ async def handle_datasets(request: web.Request) -> web.Response:
     result = []
     for slug, ds in datasets.items():
         summary = ds["summary"]
-        result.append({
-            "slug": slug,
-            "dataset_name": summary.get("dataset_name", slug),
-            "split": summary.get("split"),
-            "total_samples": summary.get("total_samples", 0),
-            "total_findings": len(ds["findings"]),
-            "by_severity": summary.get("by_severity", {}),
-        })
+        result.append(
+            {
+                "slug": slug,
+                "dataset_name": summary.get("dataset_name", slug),
+                "split": summary.get("split"),
+                "total_samples": summary.get("total_samples", 0),
+                "total_findings": len(ds["findings"]),
+                "by_severity": summary.get("by_severity", {}),
+            }
+        )
     return web.json_response(result)
 
 
@@ -356,20 +362,28 @@ async def handle_sample(request: web.Request) -> web.Response:
         for key, val in record.items():
             if key.startswith("__"):
                 continue
-            if isinstance(val, dict) and isinstance(val.get("bytes"), bytes) and val["bytes"]:
-                result["images"].append({
-                    "field": key,
-                    "data_url": _to_data_url(val["bytes"], val.get("path") or ""),
-                })
+            if (
+                isinstance(val, dict)
+                and isinstance(val.get("bytes"), bytes)
+                and val["bytes"]
+            ):
+                result["images"].append(
+                    {
+                        "field": key,
+                        "data_url": _to_data_url(val["bytes"], val.get("path") or ""),
+                    }
+                )
 
         # inspect_ai Sample.files stored under __files__
         files_map: dict = record.get("__files__") or {}
         for name, data in files_map.items():
             if isinstance(data, bytes):
-                result["files"].append({
-                    "name": name,
-                    "data_url": _to_data_url(data, name),
-                })
+                result["files"].append(
+                    {
+                        "name": name,
+                        "data_url": _to_data_url(data, name),
+                    }
+                )
             elif isinstance(data, str):
                 result["files"].append({"name": name, "data_url": data})
 
