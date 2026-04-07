@@ -56,29 +56,15 @@ inspect-dataset report findings/
 `inspect-dataset view` serves a local React app for browsing findings and
 triaging issues.
 
-Unlike `inspect_ai` and `inspect-scout`, this repository does not currently
-commit built frontend assets, so the viewer needs a one-time local frontend
-build before it will work.
+Like `inspect_ai` and `inspect-scout`, the built frontend artifacts are
+shipped in the repository and included in the package.
 
-### First-time setup
+### Getting started
 
 1. Install development dependencies:
 
 ```bash
 uv sync --extra dev
-```
-
-1. Install the viewer frontend dependencies:
-
-```bash
-cd src/inspect_dataset/_view/www
-npm install
-```
-
-1. Build the frontend bundle:
-
-```bash
-npm run build
 ```
 
 1. Return to the repository root and generate a findings directory if you do
@@ -100,13 +86,14 @@ uv run inspect-dataset view findings/
 http://localhost:7576/
 ```
 
-### After the first build
+### Rebuilding the frontend
 
-If you are only using the viewer, you normally only need to rebuild after
-changing files in `src/inspect_dataset/_view/www/`:
+You only need to rebuild the frontend if you change files in
+`src/inspect_dataset/_view/www/`:
 
 ```bash
 cd src/inspect_dataset/_view/www
+npm install
 npm run build
 ```
 

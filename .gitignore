@@ -15,6 +15,10 @@ wheels/
 # Environment files
 .env
 
+# Git worktrees
+.worktrees/
+
 # inspect-dataset generated files
 findings/
-.worktrees/
+!src/inspect_dataset/_view/www/dist/
+!src/inspect_dataset/_view/www/dist/**
