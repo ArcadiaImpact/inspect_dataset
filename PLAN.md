@@ -434,7 +434,177 @@ results are always persisted without requiring an explicit flag.
 - [x] Ensure `findings/` parent is created if it doesn't exist (already handled
   by `save_findings` → `output_dir.mkdir(parents=True, exist_ok=True)`)
 
-### v0.4 — Eval-informed scanners (inspect-scout integration, planned)
+### v0.4 — Dataset Explorer & Scanner Workbench (planned)
+
+The v0.3 UI was built as a findings viewer — it requires a pre-existing scan
+output directory and is oriented around triaging findings. This phase reimagines
+the UI as a **dataset explorer first**, with scan results as an overlay rather
+than the entry point. The goal: a researcher should be able to open any dataset,
+understand its structure, poke around in the data, and then selectively run
+scanners — all without leaving the browser.
+
+#### Motivation
+
+The current UI has two blind spots:
+
+1. **You need a scan before you can see anything.** If you just want to look at
+   a dataset you've never seen before, you have to run the CLI first. The UI
+   should be a zero-ceremony way to open and explore a dataset.
+2. **Findings are disconnected from exploration.** Triaging a finding often
+   requires context that the findings panel doesn't provide — column
+   distributions, neighbouring samples, the dataset schema. Today you alt-tab
+   to the HF viewer or a notebook for that context.
+
+#### Core concepts
+
+**Dataset sources — three ways in:**
+
+| Source | How it works |
+| ------ | ------------ |
+| Cached HF datasets | List datasets already in the local HF cache (`~/.cache/huggingface/`); one click to load |
+| Installed inspect tasks | Discover `@task`-decorated functions from installed packages (e.g. `inspect_evals`); run `record_to_sample` to materialise records |
+| HF search / direct entry | Search bar in the UI header; enter a HF slug (e.g. `cais/hle`) or search by keyword; download + load on demand |
+
+The home screen becomes a **dataset picker** rather than a findings-directory
+picker — findings dirs are still loadable, but they're one source among several.
+
+**Schema & statistics panel:**
+
+Before diving into rows, show a dataset overview:
+
+- Field names, types (string, int, float, image, list, dict), null counts
+- Per-column summary statistics: unique values, min/max/mean for numerics,
+  length distribution for strings, sample thumbnails for image columns
+- Total row count, estimated memory footprint
+- Dataset card / description (from HF metadata or README) if available
+
+This gives a researcher the "shape" of the data in seconds, before they look at
+a single row.
+
+**Rich sample detail:**
+
+The sample detail panel should render field values intelligently:
+
+- **Images**: inline thumbnails, click to expand; support HF `Image` feature,
+  base64 data URIs, and `inspect.Sample` files
+- **Long text**: collapsible with syntax highlighting for markdown/code
+- **JSON/dict fields**: interactive tree view (expand/collapse nodes)
+- **Lists**: rendered as chips or expandable sub-tables
+- **Nulls/missing**: visually distinct (greyed placeholder, not blank)
+
+**Interactive table beyond basic browsing:**
+
+- **Column-level filtering**: click a column header for type-appropriate filters
+  (range slider for numerics, regex/substring for strings, has-image/no-image
+  for image columns)
+- **Sort by any column**, including derived columns like answer length or
+  finding count
+- **Column visibility**: hide/show columns; useful for wide datasets with
+  dozens of metadata fields
+- **Row selection**: select rows to form an ad-hoc subset for export or
+  scanner targeting
+- **Full-text search**: search across all string fields simultaneously
+
+#### Scanner workbench
+
+Scanners should be runnable from the UI, not just the CLI:
+
+- **Scanner panel**: list of available scanners (builtin + LLM) with
+  descriptions; toggle which to run; configure parameters (e.g.
+  `max_answer_words`)
+- **Run scope**: option to run on the full dataset or only the currently
+  filtered/selected rows — useful for re-checking a subset after changes or
+  for expensive LLM scanners where you don't want to scan 3,000 samples
+- **Live results**: findings appear incrementally as scanners complete;
+  the findings overlay on the table updates in real time
+- **Re-scan**: after dismissing findings and adjusting filters, re-run
+  scanners without restarting
+- **Model selector**: for LLM scanners, pick a model from a dropdown
+  (populated from available API keys / inspect_ai model registry)
+
+The existing findings-first triage workflow (confirm/dismiss/skip) remains
+available as a view mode, but it's no longer the only way in.
+
+#### Dataset provenance & source code
+
+For inspect tasks, the UI should surface how the dataset was constructed:
+
+- **Source function**: show the module path and link to the source code of the
+  `record_to_sample` / dataset-loading function (e.g.
+  `inspect_evals/core_bench/dataset.py:read_core_bench_dataset`). Rendered as
+  a syntax-highlighted read-only code block.
+- **Data pipeline**: where the raw data lives on disk (HF cache path, or
+  custom cache like `/Users/matt/Library/Caches/inspect_evals/CORE-Bench/data/`)
+- **Upstream dataset card**: link to the HF dataset page or paper
+
+Some evals have complex data pipelines — e.g. CORE-Bench downloads an encrypted
+JSON from HF, decrypts it with GPG, then uses capsule DOIs to download tarballs
+containing code, results, notebooks, and images per sample. Enabling full
+exploration of these nested artefacts (browsing files inside a capsule tarball)
+is aspirational — not for this phase — but surfacing the provenance info and
+source code is achievable and valuable.
+
+#### Additional suggestions
+
+**Comparative / side-by-side view:**
+
+For duplicate findings, show all members of the duplicate group side by side
+rather than one at a time. Extend this to a general "compare N samples" mode
+where you can pin samples and see them in columns. Useful for spotting patterns
+in clusters of similar findings.
+
+**Annotation & notes:**
+
+Extend triage beyond binary confirm/dismiss. Allow free-text notes on any
+sample (not just flagged ones). Notes persist to a `annotations.json` alongside
+triage decisions. This turns the UI into a lightweight annotation tool for
+dataset curation — researchers can flag samples they notice during exploration
+even if no scanner caught them.
+
+**Image gallery view:**
+
+For multimodal datasets, offer a grid/gallery layout that shows image
+thumbnails with minimal text overlay (sample ID, answer, finding badges).
+Faster for visual scanning than a row-based table. Click a thumbnail to open
+the full sample detail.
+
+**Column-level quality heatmap:**
+
+A bird's-eye visualisation: one row per scanner, one column per dataset column,
+cells coloured by finding density. Immediately shows which fields have the most
+issues. Clickable — zoom into that scanner×field combination.
+
+**Export options:**
+
+- Filtered subset as CSV/JSON/Parquet
+- `clean_ids.txt` (existing) — IDs with no confirmed findings
+- `flagged_ids.txt` — IDs with confirmed findings
+- HuggingFace correction — submit a corrective PR to a HF dataset
+- HuggingFace dataset push — upload a cleaned subset back to HF (stretch goal)
+
+**Shareable reports:**
+
+Generate a static HTML report from the current view state (filters, triage
+decisions, annotations) that can be shared with collaborators who don't have
+the tool installed. Similar to how inspect's log viewer can export a standalone
+HTML file.
+
+#### Implementation sketch
+
+This is a significant expansion of the UI. Rough phasing:
+
+1. **v0.4.0 — Dataset picker + direct loading**: home screen lists cached HF
+   datasets and installed inspect tasks; HF search bar; load without prior scan
+2. **v0.4.1 — Schema panel + rich rendering**: dataset overview statistics;
+   intelligent field rendering in sample detail
+3. **v0.4.2 — Scanner workbench**: run scanners from UI; scope to
+   filtered/selected rows; live results
+4. **v0.4.3 — Annotations, gallery view, comparative view**: extended
+   interaction modes
+5. **v0.4.4 — Export + shareable reports**: static HTML export, filtered
+   subset download
+
+### v0.5 — Eval-informed scanners (inspect-scout integration, planned)
 
 - [ ] `universal_failure` — all models fail → bad label candidate
 - [ ] `universal_success` — all models succeed → leakage candidate
