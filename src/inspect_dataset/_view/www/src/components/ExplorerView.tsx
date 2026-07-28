@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AgGridReact } from "ag-grid-react";
 import {
@@ -12,20 +12,135 @@ import {
   fetchExplorerRecord,
   fetchExplorerRecords,
   fetchExplorerSchema,
+  fetchScanners,
+  runExplorerScan,
 } from "../api";
 import type {
   CellValue,
+  ExploreFinding,
   ExploreRecordDetail,
   ExploreRow,
+  ScannerInfo,
   SchemaField,
   SchemaInfo,
 } from "../types";
+
+// Readable, theme-adaptive row selection color for the AG Grid checkbox
+// selection (the previous dark default made cell text unreadable).
+const gridTheme = themeQuartz.withParams({
+  selectedRowBackgroundColor: "rgba(13, 110, 253, 0.14)",
+});
+
+// ── Resizable side panel (drag handle on the left edge) ─────────────────────
+
+function ResizablePanel({
+  width,
+  onWidth,
+  min = 280,
+  max = 900,
+  children,
+}: {
+  width: number;
+  onWidth: (w: number) => void;
+  min?: number;
+  max?: number;
+  children: React.ReactNode;
+}) {
+  const dragging = useRef(false);
+
+  useEffect(() => {
+    const move = (e: MouseEvent) => {
+      if (!dragging.current) return;
+      const next = window.innerWidth - e.clientX;
+      onWidth(Math.min(max, Math.max(min, next)));
+    };
+    const up = () => {
+      if (!dragging.current) return;
+      dragging.current = false;
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    return () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+  }, [onWidth, min, max]);
+
+  return (
+    <div className="d-flex" style={{ width, minWidth: width, height: "100%" }}>
+      <div
+        onMouseDown={() => {
+          dragging.current = true;
+          document.body.style.userSelect = "none";
+          document.body.style.cursor = "col-resize";
+        }}
+        title="Drag to resize"
+        style={{ width: 6, cursor: "col-resize", flexShrink: 0 }}
+        className="bg-body-secondary border-start"
+      />
+      <div className="flex-grow-1" style={{ minWidth: 0, height: "100%" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 // ── Cell renderers ─────────────────────────────────────────────────────────
 
-function CellRenderer({ value }: { value: CellValue }) {
+// Single-line JSON for expanded nested values; tooltip capped so a huge
+// cell can't produce a megabyte hover.
+function NestedJson({ value }: { value: CellValue }) {
+  const str = JSON.stringify(value) ?? "";
+  return (
+    <span
+      className="font-monospace small"
+      title={str.length > 1000 ? `${str.slice(0, 1000)}…` : str}
+      style={{
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        display: "block",
+      }}
+    >
+      {str}
+    </span>
+  );
+}
+
+// Wrapped multi-line content, clamped to a line count so one giant field
+// can't make a row fill the whole viewport (the record panel shows it all).
+const clampStyle = (lines: number): React.CSSProperties => ({
+  display: "-webkit-box",
+  WebkitLineClamp: lines,
+  WebkitBoxOrient: "vertical",
+  overflow: "hidden",
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
+  lineHeight: 1.45,
+  padding: "6px 0",
+});
+
+function PrettyJson({ value }: { value: CellValue }) {
+  return (
+    <span className="font-monospace small" style={clampStyle(16)}>
+      {JSON.stringify(value, null, 2) ?? ""}
+    </span>
+  );
+}
+
+function CellRenderer({
+  value,
+  expandNested,
+  multiLine,
+}: {
+  value: CellValue;
+  expandNested: boolean;
+  multiLine: boolean;
+}) {
   if (value === null || value === undefined) {
     return (
       <span className="fst-italic" style={{ opacity: 0.55 }}>
@@ -57,6 +172,8 @@ function CellRenderer({ value }: { value: CellValue }) {
         </span>
       );
     }
+    if (multiLine) return <PrettyJson value={value} />;
+    if (expandNested) return <NestedJson value={value} />;
     return (
       <span
         className="font-monospace small"
@@ -75,6 +192,8 @@ function CellRenderer({ value }: { value: CellValue }) {
     );
   }
   if (Array.isArray(value)) {
+    if (multiLine) return <PrettyJson value={value} />;
+    if (expandNested) return <NestedJson value={value} />;
     return (
       <span className="small" style={{ opacity: 0.7 }}>
         [{value.length} items]
@@ -82,6 +201,16 @@ function CellRenderer({ value }: { value: CellValue }) {
     );
   }
   const str = String(value);
+  if (multiLine) {
+    return (
+      <span
+        title={str.length > 1000 ? `${str.slice(0, 1000)}…` : str}
+        style={clampStyle(12)}
+      >
+        {str}
+      </span>
+    );
+  }
   return (
     <span
       title={str}
@@ -113,17 +242,26 @@ const TYPE_BADGE: Record<string, string> = {
 function SchemaPanel({
   schema,
   onClose,
+  hiddenColumns,
+  onToggleColumn,
 }: {
   schema: SchemaField[];
   onClose: () => void;
+  hiddenColumns: Set<string>;
+  onToggleColumn: (name: string, visible: boolean) => void;
 }) {
   return (
     <div
-      className="border-start d-flex flex-column bg-body"
-      style={{ width: 300, minWidth: 300, overflowY: "auto" }}
+      className="d-flex flex-column bg-body"
+      style={{ width: "100%", height: "100%", overflowY: "auto" }}
     >
       <div className="p-3 border-bottom d-flex justify-content-between align-items-center">
-        <h6 className="mb-0 fw-semibold">Schema</h6>
+        <div>
+          <h6 className="mb-0 fw-semibold">Schema</h6>
+          <span className="small text-body-secondary">
+            Tick a field to show its column
+          </span>
+        </div>
         <button
           className="btn btn-sm btn-close"
           onClick={onClose}
@@ -132,35 +270,42 @@ function SchemaPanel({
       </div>
       <div className="px-3 py-2">
         {schema.map((f) => (
-          <div key={f.name} className="mb-3">
-            <div className="d-flex justify-content-between align-items-center mb-1">
-              <span className="fw-semibold small text-truncate me-2">
-                {f.name}
-              </span>
-              <span
-                className={`badge small flex-shrink-0 ${TYPE_BADGE[f.type] ?? "bg-secondary"}`}
-              >
-                {f.type}
-              </span>
-            </div>
-            <div className="small text-body-secondary">
-              {f.null_count > 0 && (
-                <span className="me-2">
-                  {f.null_count} null (
-                  {Math.round((f.null_count / f.total) * 100)}%)
+          <div key={f.name} className="mb-3 d-flex align-items-start">
+            <input
+              type="checkbox"
+              className="form-check-input mt-1 me-2 flex-shrink-0"
+              checked={!hiddenColumns.has(f.name)}
+              onChange={(e) => onToggleColumn(f.name, e.target.checked)}
+              title={hiddenColumns.has(f.name) ? "Show column" : "Hide column"}
+            />
+            <div className="flex-grow-1" style={{ minWidth: 0 }}>
+              <div className="d-flex justify-content-between align-items-center mb-1">
+                <span className="fw-semibold small me-2">{f.name}</span>
+                <span
+                  className={`badge small flex-shrink-0 ${TYPE_BADGE[f.type] ?? "bg-secondary"}`}
+                >
+                  {f.type}
                 </span>
-              )}
-              {f.unique_count !== undefined && (
-                <span className="me-2">{f.unique_count} unique</span>
-              )}
-              {f.avg_length !== undefined && (
-                <span>avg {f.avg_length} chars</span>
-              )}
-              {f.mean !== undefined && (
-                <span>
-                  {f.min}–{f.max} (mean {f.mean})
-                </span>
-              )}
+              </div>
+              <div className="small text-body-secondary">
+                {f.null_count > 0 && (
+                  <span className="me-2">
+                    {f.null_count} null (
+                    {Math.round((f.null_count / f.total) * 100)}%)
+                  </span>
+                )}
+                {f.unique_count !== undefined && (
+                  <span className="me-2">{f.unique_count} unique</span>
+                )}
+                {f.avg_length !== undefined && (
+                  <span>avg {f.avg_length} chars</span>
+                )}
+                {f.mean !== undefined && (
+                  <span>
+                    {f.min}–{f.max} (mean {f.mean})
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         ))}
@@ -212,8 +357,8 @@ function RecordDetailPanel({
 
   return (
     <div
-      className="border-start d-flex flex-column bg-body"
-      style={{ width: 360, minWidth: 360, overflowY: "auto" }}
+      className="d-flex flex-column bg-body"
+      style={{ width: "100%", height: "100%", overflowY: "auto" }}
     >
       <div className="p-3 border-bottom d-flex justify-content-between align-items-center">
         <h6 className="mb-0 fw-semibold">Record #{idx}</h6>
@@ -342,6 +487,201 @@ function FieldValue({ value }: { value: CellValue }) {
   return <span style={{ whiteSpace: "pre-wrap" }}>{str}</span>;
 }
 
+// ── Scanners panel ──────────────────────────────────────────────────────────
+
+const SEVERITY_BADGE: Record<string, string> = {
+  high: "bg-danger",
+  medium: "bg-warning text-dark",
+  low: "bg-secondary",
+};
+
+function ScannersPanel({
+  sessionId,
+  onClose,
+  onJumpToRow,
+}: {
+  sessionId: string;
+  onClose: () => void;
+  onJumpToRow: (idx: number) => void;
+}) {
+  const [scanners, setScanners] = useState<ScannerInfo[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [model, setModel] = useState("");
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [findings, setFindings] = useState<ExploreFinding[] | null>(null);
+
+  useEffect(() => {
+    fetchScanners().then((list) => {
+      setScanners(list);
+      // Default: select all static scanners.
+      setSelected(
+        new Set(list.filter((s) => s.kind === "static").map((s) => s.name)),
+      );
+    });
+  }, []);
+
+  const toggle = (name: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+
+  const run = async () => {
+    setRunning(true);
+    setError(null);
+    try {
+      const result = await runExplorerScan(
+        sessionId,
+        [...selected],
+        model.trim() || undefined,
+      );
+      setFindings(result.findings);
+    } catch (e) {
+      setError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const bySeverity = { high: 0, medium: 0, low: 0 };
+  for (const f of findings ?? [])
+    bySeverity[f.severity] = (bySeverity[f.severity] ?? 0) + 1;
+
+  const needsModel = [...selected].some(
+    (n) => scanners.find((s) => s.name === n)?.kind === "llm",
+  );
+
+  return (
+    <div
+      className="d-flex flex-column bg-body"
+      style={{ width: "100%", height: "100%", overflowY: "auto" }}
+    >
+      <div className="p-3 border-bottom d-flex justify-content-between align-items-center">
+        <h6 className="mb-0 fw-semibold">Scanners</h6>
+        <button
+          className="btn btn-sm btn-close"
+          onClick={onClose}
+          aria-label="Close scanners panel"
+        />
+      </div>
+
+      <div className="px-3 py-2 border-bottom">
+        {scanners.map((s) => (
+          <div key={s.name} className="form-check mb-1" title={s.description}>
+            <input
+              type="checkbox"
+              className="form-check-input"
+              id={`scanner-${s.name}`}
+              checked={selected.has(s.name)}
+              onChange={() => toggle(s.name)}
+            />
+            <label
+              className="form-check-label small"
+              htmlFor={`scanner-${s.name}`}
+            >
+              {s.name}
+              {s.kind === "llm" && (
+                <span className="badge bg-info text-dark ms-1">LLM</span>
+              )}
+            </label>
+          </div>
+        ))}
+
+        {needsModel && (
+          <input
+            type="text"
+            className="form-control form-control-sm mt-2"
+            placeholder="model (e.g. openai/gpt-4o-mini)"
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+          />
+        )}
+
+        <button
+          className="btn btn-sm btn-primary w-100 mt-2"
+          onClick={run}
+          disabled={running || selected.size === 0}
+        >
+          {running ? (
+            <>
+              <span className="spinner-border spinner-border-sm me-1" />
+              Running…
+            </>
+          ) : (
+            <>
+              <i className="bi bi-play-fill me-1" />
+              Run {selected.size} scanner{selected.size === 1 ? "" : "s"}
+            </>
+          )}
+        </button>
+      </div>
+
+      {error && (
+        <div className="alert alert-danger m-2 small mb-0">{error}</div>
+      )}
+
+      {findings !== null && !error && (
+        <div className="flex-grow-1" style={{ overflowY: "auto" }}>
+          <div className="px-3 py-2 border-bottom small text-body-secondary d-flex gap-2 align-items-center">
+            <span className="fw-semibold text-body">
+              {findings.length} finding{findings.length === 1 ? "" : "s"}
+            </span>
+            {bySeverity.high > 0 && (
+              <span className="badge bg-danger">{bySeverity.high} high</span>
+            )}
+            {bySeverity.medium > 0 && (
+              <span className="badge bg-warning text-dark">
+                {bySeverity.medium} medium
+              </span>
+            )}
+            {bySeverity.low > 0 && (
+              <span className="badge bg-secondary">{bySeverity.low} low</span>
+            )}
+          </div>
+          {findings.length === 0 ? (
+            <div className="p-3 text-body-secondary small">
+              No issues found.
+            </div>
+          ) : (
+            <ul className="list-group list-group-flush">
+              {findings.map((f) => (
+                <li key={f.id} className="list-group-item py-2">
+                  <button
+                    className="btn btn-link btn-sm p-0 text-start w-100"
+                    onClick={() => onJumpToRow(f.sample_index)}
+                    title="Jump to this record"
+                  >
+                    <div className="d-flex justify-content-between align-items-center mb-1">
+                      <span className="fw-semibold small text-body">
+                        {f.scanner}
+                      </span>
+                      <span
+                        className={`badge small ${SEVERITY_BADGE[f.severity] ?? "bg-secondary"}`}
+                      >
+                        {f.severity}
+                      </span>
+                    </div>
+                    <div
+                      className="small text-body-secondary"
+                      style={{ whiteSpace: "normal" }}
+                    >
+                      <span className="text-body">#{f.sample_index}</span>{" "}
+                      {f.explanation}
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main explorer view ──────────────────────────────────────────────────────
 
 const PAGE_SIZE = 200;
@@ -358,9 +698,16 @@ export function ExplorerView() {
   const [loadingRows, setLoadingRows] = useState(false);
   const [rowError, setRowError] = useState<string | null>(null);
   const [showSchema, setShowSchema] = useState(false);
+  const [showScanners, setShowScanners] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [offset, setOffset] = useState(0);
   const [localSchema, setLocalSchema] = useState<SchemaInfo | null>(null);
+  const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
+  const [schemaWidth, setSchemaWidth] = useState(360);
+  const [recordWidth, setRecordWidth] = useState(440);
+  const [scannersWidth, setScannersWidth] = useState(360);
+  const [expandNested, setExpandNested] = useState(false);
+  const [multiLine, setMultiLine] = useState(false);
   const gridApi = useRef<GridApi | null>(null);
 
   const sid = sessionId ?? explorerSession?.session_id ?? null;
@@ -385,7 +732,6 @@ export function ExplorerView() {
   // result — they're reset here deliberately when the session changes.
   useEffect(() => {
     if (!sid) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadingRows(true);
     setRowError(null);
     fetchExplorerRecords(sid, 0, PAGE_SIZE)
@@ -422,31 +768,105 @@ export function ExplorerView() {
       ? schema.filter((f) => !f.name.startsWith("__")).map((f) => f.name)
       : (session?.columns ?? []).filter((c) => !c.startsWith("__"));
 
-  const colDefs: ColDef<ExploreRow>[] = [
-    {
-      headerName: "#",
-      field: "__index",
-      width: 65,
-      pinned: "left" as const,
-      sort: "asc" as const,
-      sortable: true,
-    },
-    ...columnNames.map((name) => {
-      const schemaField = schema.find((f) => f.name === name);
-      return {
+  const columnKey = columnNames.join("\u0000");
+
+  // Sample of the first page of rows, used to estimate content-based column
+  // widths. Keyed on (session, rows-arrived) rather than the rows array so
+  // loadMore appends don't produce a new sample — colDefs would change
+  // identity and reset the user's manual column resizes.
+  const hasRows = rows.length > 0;
+  const sampleRows: ExploreRow[] = useMemo(
+    () => rows.slice(0, 50),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sid, hasRows],
+  );
+
+  // Size each column at least to fit its header text, widened toward the
+  // content's typical width (90th percentile of the sampled rows' display
+  // length) up to a 600px cap, so text-heavy datasets get readable columns
+  // while wide datasets still scroll horizontally.
+  //
+  // Widths/sort use the initial* colDef properties: they only apply when a
+  // column is first created, so the display-mode toggles below can swap in
+  // new colDefs without resetting the user's manual resizes or sort.
+  const colDefs: ColDef<ExploreRow>[] = useMemo(() => {
+    const headerWidth = (name: string) =>
+      Math.min(560, Math.max(120, name.length * 8.5 + 56));
+
+    // Approximate on-screen length of a cell's collapsed rendering.
+    const displayLength = (v: CellValue): number => {
+      if (v === null || v === undefined) return 4;
+      if (typeof v === "string") return v.length;
+      if (Array.isArray(v)) return 10; // "[x items]"
+      if (typeof v === "object") return 8; // "{…}" / image / bytes badge
+      return String(v).length;
+    };
+
+    const contentWidth = (name: string): number => {
+      const lengths = sampleRows
+        .map((r) => displayLength(r[name] as CellValue))
+        .sort((a, b) => a - b);
+      if (lengths.length === 0) return 0;
+      const p90 =
+        lengths[Math.min(lengths.length - 1, Math.floor(lengths.length * 0.9))];
+      return p90 * 7.5 + 40; // ~avg char width in the cell font + padding
+    };
+
+    return [
+      {
+        headerName: "#",
+        field: "__index",
+        initialWidth: 72,
+        pinned: "left" as const,
+        initialSort: "asc" as const,
+        sortable: true,
+      },
+      ...columnNames.map((name) => ({
         headerName: name,
         field: name as keyof ExploreRow & string,
-        flex: schemaField?.type === "str" ? 2 : 1,
+        initialWidth: Math.min(
+          600,
+          Math.max(headerWidth(name), contentWidth(name)),
+        ),
         minWidth: 80,
         sortable: true,
         filter: true,
+        resizable: true,
+        wrapText: multiLine,
+        autoHeight: multiLine,
         valueFormatter: () => "",
         cellRenderer: (params: ICellRendererParams<ExploreRow>) => (
-          <CellRenderer value={params.value as CellValue} />
+          <CellRenderer
+            value={params.value as CellValue}
+            expandNested={expandNested}
+            multiLine={multiLine}
+          />
         ),
-      };
-    }),
-  ];
+      })),
+    ];
+    // columnKey captures the (ordered) column set; schema identity is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columnKey, sampleRows, expandNested, multiLine]);
+
+  // Rows revert to the fixed height when auto-height is switched off.
+  useEffect(() => {
+    if (!multiLine) gridApi.current?.resetRowHeights();
+  }, [multiLine]);
+
+  const toggleColumn = useCallback((name: string, visible: boolean) => {
+    gridApi.current?.setColumnsVisible([name], visible);
+    setHiddenColumns((prev) => {
+      const next = new Set(prev);
+      if (visible) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }, []);
+
+  const jumpToRow = useCallback((idx: number) => {
+    setSelectedIdx(idx);
+    gridApi.current?.ensureIndexVisible(idx, "middle");
+  }, []);
 
   const handleClose = () => {
     clearSession();
@@ -491,7 +911,39 @@ export function ExplorerView() {
             </span>
           </span>
         )}
-        <div className="d-flex gap-2">
+        <div className="d-flex gap-2 align-items-center">
+          <div
+            className="form-check form-switch mb-0 me-1 small"
+            title="Show list/object contents as JSON in cells"
+          >
+            <input
+              className="form-check-input"
+              type="checkbox"
+              role="switch"
+              id="expand-nested-switch"
+              checked={expandNested}
+              onChange={(e) => setExpandNested(e.target.checked)}
+            />
+            <label className="form-check-label" htmlFor="expand-nested-switch">
+              Expand nested
+            </label>
+          </div>
+          <div
+            className="form-check form-switch mb-0 me-1 small"
+            title="Wrap long text and pretty-print structured fields across multiple lines"
+          >
+            <input
+              className="form-check-input"
+              type="checkbox"
+              role="switch"
+              id="multi-line-switch"
+              checked={multiLine}
+              onChange={(e) => setMultiLine(e.target.checked)}
+            />
+            <label className="form-check-label" htmlFor="multi-line-switch">
+              Multi-line
+            </label>
+          </div>
           <button
             className={`btn btn-sm ${showSchema ? "btn-secondary" : "btn-outline-secondary"}`}
             onClick={() => setShowSchema((v) => !v)}
@@ -499,6 +951,14 @@ export function ExplorerView() {
           >
             <i className="bi bi-table me-1" />
             Schema
+          </button>
+          <button
+            className={`btn btn-sm ${showScanners ? "btn-secondary" : "btn-outline-secondary"}`}
+            onClick={() => setShowScanners((v) => !v)}
+            title="Toggle scanners panel"
+          >
+            <i className="bi bi-search me-1" />
+            Scanners
           </button>
         </div>
       </nav>
@@ -524,7 +984,7 @@ export function ExplorerView() {
             <>
               <div style={{ flex: 1, minHeight: 0 }}>
                 <AgGridReact<ExploreRow>
-                  theme={themeQuartz}
+                  theme={gridTheme}
                   rowData={rows}
                   columnDefs={colDefs}
                   onGridReady={(p) => {
@@ -540,7 +1000,10 @@ export function ExplorerView() {
                   }}
                   getRowStyle={(p) =>
                     p.data?.__index === selectedIdx
-                      ? { background: "var(--bs-primary-bg-subtle)" }
+                      ? {
+                          background: "var(--bs-primary-bg-subtle)",
+                          color: "var(--bs-primary-text-emphasis)",
+                        }
                       : undefined
                   }
                 />
@@ -573,24 +1036,44 @@ export function ExplorerView() {
 
         {/* Schema panel */}
         {showSchema && schema.length > 0 && (
-          <SchemaPanel schema={schema} onClose={() => setShowSchema(false)} />
+          <ResizablePanel width={schemaWidth} onWidth={setSchemaWidth}>
+            <SchemaPanel
+              schema={schema}
+              onClose={() => setShowSchema(false)}
+              hiddenColumns={hiddenColumns}
+              onToggleColumn={toggleColumn}
+            />
+          </ResizablePanel>
+        )}
+
+        {/* Scanners panel */}
+        {showScanners && (
+          <ResizablePanel width={scannersWidth} onWidth={setScannersWidth}>
+            <ScannersPanel
+              sessionId={sid}
+              onClose={() => setShowScanners(false)}
+              onJumpToRow={jumpToRow}
+            />
+          </ResizablePanel>
         )}
 
         {/* Record detail panel */}
         {selectedIdx !== null && sid && (
-          <RecordDetailPanel
-            sessionId={sid}
-            idx={selectedIdx}
-            onClose={() => setSelectedIdx(null)}
-            onPrev={() =>
-              setSelectedIdx((i) => (i !== null && i > 0 ? i - 1 : i))
-            }
-            onNext={() =>
-              setSelectedIdx((i) => (i !== null && i < total - 1 ? i + 1 : i))
-            }
-            hasPrev={selectedIdx > 0}
-            hasNext={selectedIdx < total - 1}
-          />
+          <ResizablePanel width={recordWidth} onWidth={setRecordWidth}>
+            <RecordDetailPanel
+              sessionId={sid}
+              idx={selectedIdx}
+              onClose={() => setSelectedIdx(null)}
+              onPrev={() =>
+                setSelectedIdx((i) => (i !== null && i > 0 ? i - 1 : i))
+              }
+              onNext={() =>
+                setSelectedIdx((i) => (i !== null && i < total - 1 ? i + 1 : i))
+              }
+              hasPrev={selectedIdx > 0}
+              hasNext={selectedIdx < total - 1}
+            />
+          </ResizablePanel>
         )}
       </div>
     </div>
