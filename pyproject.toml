@@ -21,6 +21,13 @@ dependencies = [
 [project.scripts]
 inspect-dataset = "inspect_dataset.cli:cli"
 
+[project.urls]
+# The GitHub repo slug is inspect_dataset (underscore), unlike the kebab-case
+# project name — keep these pointing at the real repo when copier updates.
+Homepage = "https://github.com/Generality-Labs/inspect_dataset"
+Repository = "https://github.com/Generality-Labs/inspect_dataset"
+Issues = "https://github.com/Generality-Labs/inspect_dataset/issues"
+
 [project.optional-dependencies]
 inspect = [
     "inspect-ai>=0.3",
@@ -80,10 +87,27 @@ convention = "google"
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D"] # tests don't need docstring linting
 
-[tool.mypy]
-python_version = "3.12"
-strict = true
-ignore_missing_imports = true # third-party libs are often untyped
+[tool.basedpyright]
+pythonVersion = "3.12"
+# "strict" (pyright's), not basedpyright's stricter default "recommended" —
+# the based-only rules (reportAny etc.) are opt-in per project.
+typeCheckingMode = "strict"
+reportMissingTypeStubs = false # third-party libs are often untyped
+# Parity with the previous mypy config (`ignore_missing_imports = true`):
+# untyped third-party returns propagate as Unknown, which strict mode then
+# reports at every use site (187 findings at switch time). Tightening these
+# is follow-up work, deliberately not bundled into the template migration.
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+# The scanner registry resolves each module's `_make_scanner` factory
+# dynamically, so pyright sees the functions as unused and their cross-module
+# imports as private access. That convention predates the type-checker switch.
+reportPrivateUsage = false
+reportUnusedFunction = false
+# Runtime isinstance checks on JSON-shaped data are deliberate defensive
+# narrowing, even where the declared type makes them look redundant.
+reportUnnecessaryIsInstance = false
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -98,5 +122,5 @@ dev = [
     "pytest-playwright>=0.5",
     "ruff>=0.4",
     "watchfiles>=0.21",
-    "mypy>=1.10",
+    "basedpyright>=1.39",
 ]

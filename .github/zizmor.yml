@@ -5,5 +5,5 @@ rules:
   unpinned-uses:
     config:
       policies:
-        "MattFisher/*": ref-pin
+        "Generality-Labs/*": ref-pin
         "*": hash-pin
